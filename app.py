@@ -284,6 +284,48 @@ def initialize_database():
     )
     """)
     
+    # Tabela para controle do valor Z (PDV)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS pdv_z_values (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        cashier_id INT NOT NULL,
+        z_value DECIMAL(10,2) NOT NULL DEFAULT 0,
+        date DATE NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (cashier_id) REFERENCES cashier(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_z_value (cashier_id, date)
+    )
+    """)
+    
+    # Tabela para registrar devoluções e estornos (devo)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS devo_values (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        cashier_id INT NOT NULL,
+        devo_value DECIMAL(10,2) NOT NULL DEFAULT 0,
+        date DATE NOT NULL,
+        reason TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (cashier_id) REFERENCES cashier(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_devo_value (cashier_id, date)
+    )
+    """)
+    
+    # Tabela para controle do pote
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS pot_control (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        unit_id INT NOT NULL,
+        amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (unit_id) REFERENCES unit(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_pot_control (unit_id)
+    )
+    """)
+    
     # Inserir métodos de pagamento padrão se não existirem
     cursor.execute("SELECT COUNT(*) as count FROM payment_method")
     count = cursor.fetchone()['count']
@@ -752,6 +794,13 @@ def admin_monthly_base(unit_id):
         flash('Valor base mensal atualizado com sucesso!', 'success')
         return redirect(url_for('admin_units_list'))
     
+    # Obter histórico de valores base
+    cursor.execute(
+        "SELECT month, year, amount FROM monthly_base_amount WHERE unit_id = %s ORDER BY year DESC, month DESC",
+        (unit_id,)
+    )
+    base_history = cursor.fetchall()
+    
     cursor.close()
     conn.close()
     
@@ -761,7 +810,9 @@ def admin_monthly_base(unit_id):
         monthly_base=monthly_base,
         current_month=current_month,
         current_year=current_year,
-        month_name=calendar.month_name[current_month]
+        month_name=calendar.month_name[current_month],
+        base_history=base_history,
+        calendar=calendar
     )
 
 # Rotas para Unidades (Admin)
@@ -1061,201 +1112,6 @@ def user_cashiers(unit_id):
             flash('Acesso não autorizado a esta unidade!', 'error')
             return redirect(url_for('user_home'))
     
-    # Verificar se é para criar um novo caixa
-    if request.args.get('create') == 'true' and current_user.is_superuser:
-        # Obter o próximo número disponível para o caixa
-        cursor.execute(
-            "SELECT MAX(number) as last_number FROM cashier WHERE unit_id = %s AND number > 0",
-            (unit_id,)
-        )
-        result = cursor.fetchone()
-        next_number = 1 if not result or result['last_number'] is None else result['last_number'] + 1
-        
-        # Criar o novo caixa
-        try:
-            cursor.execute(
-                "INSERT INTO cashier (unit_id, number, status) VALUES (%s, %s, %s)",
-                (unit_id, next_number, 'fechado')
-            )
-            conn.commit()
-            flash(f'Caixa {next_number} criado com sucesso!', 'success')
-        except Exception as e:
-            conn.rollback()
-            flash(f'Erro ao criar caixa: {str(e)}', 'error')
-    
-    # Obter todos os caixas da unidade
-    cursor.execute(
-        "SELECT * FROM cashier WHERE unit_id = %s ORDER BY number",
-        (unit_id,)
-    )
-    cashiers = cursor.fetchall()
-    
-    # Obter ou criar o ID do Caixa Financeiro
-    financial_cashier_id = None
-    has_financial_cashier = False
-    
-    for cashier in cashiers:
-        if cashier['number'] == 0:
-            financial_cashier_id = cashier['id']
-            has_financial_cashier = True
-            break
-    
-    # Se não encontrou o caixa financeiro, criar um
-    if not has_financial_cashier:
-        try:
-            cursor.execute(
-                "INSERT INTO cashier (unit_id, number, status) VALUES (%s, %s, %s)",
-                (unit_id, 0, 'aberto')
-            )
-            conn.commit()
-            financial_cashier_id = cursor.lastrowid
-            
-            # Adicionar o novo caixa à lista
-            cursor.execute("SELECT * FROM cashier WHERE id = %s", (financial_cashier_id,))
-            new_cashier = cursor.fetchone()
-            if new_cashier:
-                cashiers.append(new_cashier)
-                
-            flash('Caixa Financeiro criado automaticamente.', 'info')
-        except Exception as e:
-            conn.rollback()
-            flash(f'Erro ao criar Caixa Financeiro: {str(e)}', 'error')
-    
-    # Verificação de fallback para garantir que temos um ID válido
-    if financial_cashier_id is None:
-        # Cria um ID fictício para evitar erros de renderização
-        financial_cashier_id = 0  # ID que será usado como fallback
-        flash('Problema ao acessar o Caixa Financeiro. Por favor, contate o administrador.', 'error')
-    
-    # Obter valor base mensal da unidade para o mês atual
-    today = datetime.now()
-    cursor.execute(
-        "SELECT * FROM monthly_base_amount WHERE unit_id = %s AND month = %s AND year = %s",
-        (unit_id, today.month, today.year)
-    )
-    monthly_base = cursor.fetchone()
-    base_amount = monthly_base['amount'] if monthly_base else 0
-    
-    # Obter o controle de moedas
-    cursor.execute("SELECT * FROM coins_control WHERE unit_id = %s", (unit_id,))
-    coins_control = cursor.fetchone()
-    coins_amount = 0
-    
-    if coins_control:
-        coins_amount = coins_control['total_amount']
-    else:
-        # Criar controle de moedas se não existir
-        try:
-            cursor.execute(
-                "INSERT INTO coins_control (unit_id, total_amount) VALUES (%s, %s)",
-                (unit_id, 0)
-            )
-            conn.commit()
-        except Exception as e:
-            conn.rollback()
-            flash(f'Erro ao criar controle de moedas: {str(e)}', 'error')
-    
-    # Obter totais de movimentos do dia para cada caixa
-    start_date = datetime(today.year, today.month, today.day, 0, 0, 0)
-    end_date = datetime(today.year, today.month, today.day, 23, 59, 59)
-    
-    cashier_totals = {}
-    for cashier in cashiers:
-        cursor.execute(
-            "SELECT SUM(CASE WHEN type = 'entrada' AND payment_status = 'realizado' THEN amount ELSE 0 END) as total_entrada, "
-            "SUM(CASE WHEN type = 'saida' OR type = 'despesa_loja' OR type = 'estorno' THEN amount ELSE 0 END) as total_saida "
-            "FROM movement "
-            "WHERE cashier_id = %s AND created_at BETWEEN %s AND %s",
-            (cashier['id'], start_date, end_date)
-        )
-        result = cursor.fetchone()
-        
-        if result:
-            entrada = result['total_entrada'] or 0
-            saida = result['total_saida'] or 0
-            cashier_totals[cashier['id']] = {
-                'entrada': entrada,
-                'saida': saida,
-                'saldo': entrada - saida
-            }
-        else:
-            cashier_totals[cashier['id']] = {'entrada': 0, 'saida': 0, 'saldo': 0}
-    
-    # Obter totais gerais
-    cursor.execute(
-        "SELECT SUM(CASE WHEN type = 'entrada' AND payment_status = 'realizado' THEN amount ELSE 0 END) as total_entrada, "
-        "SUM(CASE WHEN type = 'saida' OR type = 'despesa_loja' OR type = 'estorno' THEN amount ELSE 0 END) as total_saida "
-        "FROM movement "
-        "WHERE cashier_id IN (SELECT id FROM cashier WHERE unit_id = %s) "
-        "AND created_at BETWEEN %s AND %s",
-        (unit_id, start_date, end_date)
-    )
-    totals = cursor.fetchone()
-    
-    total_entrada = totals['total_entrada'] or 0
-    total_saida = totals['total_saida'] or 0
-    saldo_dia = total_entrada - total_saida
-    
-    # Calcular saldo do caixa financeiro
-    cursor.execute(
-        "SELECT SUM(CASE WHEN type = 'entrada' AND payment_status = 'realizado' THEN amount ELSE 0 END) as total_entrada, "
-        "SUM(CASE WHEN type = 'saida' OR type = 'despesa_loja' OR type = 'estorno' THEN amount ELSE 0 END) as total_saida "
-        "FROM movement "
-        "WHERE cashier_id IN (SELECT id FROM cashier WHERE unit_id = %s)",
-        (unit_id,)
-    )
-    all_time_totals = cursor.fetchone()
-    
-    all_time_entrada = all_time_totals['total_entrada'] or 0
-    all_time_saida = all_time_totals['total_saida'] or 0
-    financial_balance = all_time_entrada - all_time_saida
-    
-    cursor.close()
-    conn.close()
-    
-    return render_template(
-        'user/cashiers.html',
-        unit=unit,
-        cashiers=cashiers,
-        cashier_totals=cashier_totals,
-        total_entrada=total_entrada,
-        total_saida=total_saida,
-        saldo_dia=saldo_dia,
-        base_amount=base_amount,
-        coins_amount=coins_amount,
-        financial_balance=financial_balance,
-        financial_cashier_id=financial_cashier_id
-    )
-@app.route('/user/unit/<int:unit_id>/cashiers')
-@login_required
-def user_cashiers(unit_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    # Verificar se a unidade existe
-    cursor.execute("SELECT * FROM unit WHERE id = %s", (unit_id,))
-    unit = cursor.fetchone()
-    
-    if not unit:
-        cursor.close()
-        conn.close()
-        flash('Unidade não encontrada!', 'error')
-        return redirect(url_for('user_home'))
-    
-    # Verificar se o usuário tem acesso à unidade
-    if not current_user.is_superuser:
-        cursor.execute(
-            "SELECT * FROM user_unit WHERE user_id = %s AND unit_id = %s",
-            (current_user.id, unit_id)
-        )
-        has_access = cursor.fetchone() is not None
-        
-        if not has_access:
-            cursor.close()
-            conn.close()
-            flash('Acesso não autorizado a esta unidade!', 'error')
-            return redirect(url_for('user_home'))
-    
     # Verificar se o Caixa Financeiro existe e criar se não existir
     cursor.execute(
         "SELECT * FROM cashier WHERE unit_id = %s AND number = 0",
@@ -1392,9 +1248,6 @@ def user_cashiers(unit_id):
     
     cursor.close()
     conn.close()
-    
-    # Verifique se financial_cashier_id está definido corretamente
-    print(f"DEBUG: financial_cashier_id = {financial_cashier_id}")
     
     return render_template(
         'user/cashiers.html',
