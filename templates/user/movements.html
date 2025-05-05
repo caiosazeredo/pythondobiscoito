@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+
+{% block title %}Movimentações - Caixa {{ cashier.number }} - Casa do Biscoito{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="card shadow-sm">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center py-3">
+            <a href="{{ url_for('user_cashiers', unit_id=unit.id) }}" class="btn btn-link text-warning">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <h4 class="mb-0">Movimentação - Caixa {{ cashier.number }}</h4>
+            <div class="d-flex align-items-center">
+                <input type="date" class="form-control" id="dateFilter" value="{{ date }}">
+            </div>
+        </div>
+        
+        <div class="card-body">
+            <ul class="nav nav-tabs mb-4" id="movementTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="register-tab" data-bs-toggle="tab" data-bs-target="#register" type="button" role="tab" aria-controls="register" aria-selected="true">Registrar Movimentação</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab" aria-controls="history" aria-selected="false">Histórico</button>
+                </li>
+            </ul>
+            
+            <div class="tab-content" id="movementTabsContent">
+                <!-- Aba de Registro de Movimentação -->
+                <div class="tab-pane fade show active" id="register" role="tabpanel" aria-labelledby="register-tab">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="card shadow-sm">
+                                <div class="card-body">
+                                    <form method="post" action="{{ url_for('user_movements', unit_id=unit.id, cashier_id=cashier.id) }}">
+                                        <div class="mb-3">
+                                            <label class="form-label">Tipo de Movimentação</label>
+                                            <div class="d-flex gap-3">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="radio" name="type" id="typeEntrada" value="entrada" checked>
+                                                    <label class="form-check-label" for="typeEntrada">
+                                                        Entrada
+                                                    </label>
+                                                </div>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="radio" name="type" id="typeSaida" value="saida">
+                                                    <label class="form-check-label" for="typeSaida">
+                                                        Saída
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mb-3" id="statusContainer">
+                                            <label class="form-label">Status do Pagamento</label>
+                                            <div class="d-flex gap-3">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="radio" name="payment_status" id="statusRealizado" value="realizado" checked>
+                                                    <label class="form-check-label" for="statusRealizado">
+                                                        Valor Recebido
+                                                    </label>
+                                                </div>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="radio" name="payment_status" id="statusPendente" value="pendente">
+                                                    <label class="form-check-label" for="statusPendente">
+                                                        Pendente de Recebimento
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label for="payment_method" class="form-label">Forma de Pagamento</label>
+                                            <select class="form-select" id="payment_method" name="payment_method" required>
+                                                <option value="">Selecione</option>
+                                                {% for method in payment_methods %}
+                                                <option value="{{ method.id }}" data-category="{{ method.category }}">{{ method.name }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        
+                                        <div class="row mb-3" id="dinheiroFields" style="display: none;">
+                                            <div class="col-md-6">
+                                                <label for="coins_in" class="form-label">Entrada de moedas</label>
+                                                <div class="input-group">
+                                                    <span class="input-group-text">R$</span>
+                                                    <input type="number" class="form-control" id="coins_in" name="coins_in" step="0.01" min="0">
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label for="coins_out" class="form-label">Saída de moedas</label>
+                                                <div class="input-group">
+                                                    <span class="input-group-text">R$</span>
+                                                    <input type="number" class="form-control" id="coins_out" name="coins_out" step="0.01" min="0">
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label for="amount" class="form-label">Valor</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text">R$</span>
+                                                <input type="number" class="form-control" id="amount" name="amount" step="0.01" min="0.01" required>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label for="description" class="form-label">Descrição</label>
+                                            <textarea class="form-control" id="description" name="description" rows="2"></textarea>
+                                        </div>
+                                        
+                                        <div id="ticketFields" style="display: none;">
+                                            <div class="mb-3">
+                                                <label for="client_name" class="form-label">Nome do Cliente</label>
+                                                <input type="text" class="form-control" id="client_name" name="client_name">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="document_number" class="form-label">Número do Documento</label>
+                                                <input type="text" class="form-control" id="document_number" name="document_number">
+                                            </div>
+                                        </div>
+                                        
+                                        <button type="submit" class="btn btn-warning w-100 py-2 mt-3">
+                                            <i class="bi bi-plus-circle me-1"></i> Adicionar Movimentação
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <div class="card shadow-sm bg-light">
+                                <div class="card-body">
+                                    <h5 class="card-title mb-3">Resumo do Dia</h5>
+                                    
+                                    <div class="small text-muted mb-2">Valores por Categoria:</div>
+                                    
+                                    {% set total_entrada = {'value': 0} %}
+                                    {% set total_saida = {'value': 0} %}
+                                    {% set totals = {'dinheiro': 0, 'credito': 0, 'debito': 0, 'pix': 0, 'ticket': 0} %}
+                                    
+                                    {% for mov in movements %}
+                                        {% for method in payment_methods %}
+                                            {% if method.id == mov.payment_method %}
+                                                {% if mov.type == 'entrada' and mov.payment_status == 'realizado' %}
+                                                    {% if method.category in totals %}
+                                                        {% set _ = totals.update({method.category: totals[method.category] + mov.amount}) %}
+                                                    {% endif %}
+                                                    {% set _ = total_entrada.update({'value': total_entrada.value + mov.amount}) %}
+                                                {% elif mov.type == 'saida' %}
+                                                    {% set _ = total_saida.update({'value': total_saida.value + mov.amount}) %}
+                                                {% endif %}
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% endfor %}
+                                    
+                                    {% for category, total in totals.items() %}
+                                        <div class="d-flex justify-content-between align-items-center small mb-1">
+                                            <span>{{ category|capitalize }}:</span>
+                                            <span class="{{ 'text-success' if total > 0 else '' }}">
+                                                R$ {{ "%.2f"|format(total) }}
+                                            </span>
+                                        </div>
+                                    {% endfor %}
+                                    
+                                    <hr>
+                                    
+                                    <div class="d-flex justify-content-between align-items-center fw-bold">
+                                        <span>Total Entradas:</span>
+                                        <span class="text-success">R$ {{ "%.2f"|format(total_entrada.value) }}</span>
+                                    </div>
+                                    
+                                    <div class="d-flex justify-content-between align-items-center fw-bold">
+                                        <span>Total Saídas:</span>
+                                        <span class="text-danger">R$ {{ "%.2f"|format(total_saida.value) }}</span>
+                                    </div>
+                                    
+                                    <hr>
+                                    
+                                    <div class="d-flex justify-content-between align-items-center fw-bold">
+                                        <span>Saldo do Dia:</span>
+                                        <span class="{{ 'text-success' if total_entrada.value - total_saida.value >= 0 else 'text-danger' }}">
+                                            R$ {{ "%.2f"|format(total_entrada.value - total_saida.value) }}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Aba de Histórico -->
+                <div class="tab-pane fade" id="history" role="tabpanel" aria-labelledby="history-tab">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Horário</th>
+                                    <th>Tipo</th>
+                                    <th>Status</th>
+                                    <th>Forma</th>
+                                    <th>Valor</th>
+                                    <th>Descrição</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for mov in movements %}
+                                <tr>
+                                    <td>{{ mov.created_at.strftime('%H:%M') }}</td>
+                                    <td>
+                                        <span class="badge {{ 'bg-success' if mov.type == 'entrada' else 'bg-danger' }}">
+                                            {{ "Entrada" if mov.type == 'entrada' else "Saída" }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge {{ 'bg-warning' if mov.payment_status == 'pendente' else 'bg-success' }}">
+                                            {{ "Pendente" if mov.payment_status == 'pendente' else "Realizado" }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% for method in payment_methods %}
+                                            {% if method.id == mov.payment_method %}
+                                                {{ method.name }}
+                                            {% endif %}
+                                        {% endfor %}
+                                    </td>
+                                    <td class="{{ 'text-success' if mov.type == 'entrada' else 'text-danger' }} fw-bold">
+                                        R$ {{ "%.2f"|format(mov.amount) }}
+                                    </td>
+                                    <td>{{ mov.description }}</td>
+                                    <td>
+                                        <form method="post" action="{{ url_for('delete_movement', unit_id=unit.id, cashier_id=cashier.id, movement_id=mov.id) }}" class="d-inline">
+                                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Tem certeza que deseja excluir esta movimentação?')">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="7" class="text-center">Nenhuma movimentação registrada para esta data.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Atualizar ao mudar a data
+        document.getElementById('dateFilter').addEventListener('change', function() {
+            window.location.href = "{{ url_for('user_movements', unit_id=unit.id, cashier_id=cashier.id) }}?date=" + this.value;
+        });
+        
+        // Toggle campos de tipo de pagamento
+        const paymentMethodSelect = document.getElementById('payment_method');
+        const dinheiroFields = document.getElementById('dinheiroFields');
+        const ticketFields = document.getElementById('ticketFields');
+        const statusContainer = document.getElementById('statusContainer');
+        const typeRadios = document.getElementsByName('type');
+        
+        paymentMethodSelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const category = selectedOption.getAttribute('data-category');
+            
+            dinheiroFields.style.display = (category === 'dinheiro') ? 'flex' : 'none';
+            ticketFields.style.display = (category === 'ticket') ? 'block' : 'none';
+        });
+        
+        // Toggle status container baseado no tipo
+        for (const radio of typeRadios) {
+            radio.addEventListener('change', function() {
+                statusContainer.style.display = (this.value === 'entrada') ? 'block' : 'none';
+            });
+        }
+    });
+</script>
+{% endblock %}

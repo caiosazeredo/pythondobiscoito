@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Funcionário - Casa do Biscoito{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="position-relative mb-4">
+        <a href="{{ url_for('admin_users_list') }}" class="btn btn-link text-warning position-absolute start-0">
+            <i class="bi bi-arrow-left-circle-fill fs-3"></i>
+        </a>
+        <h1 class="text-center">Editar/Excluir Usuário</h1>
+    </div>
+    
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <form method="post" action="{{ url_for('admin_edit_user', user_id=user.id) }}" class="card shadow-sm p-4">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label for="name" class="form-label">Nome</label>
+                        <input type="text" class="form-control" id="name" name="name" value="{{ user.name }}" required>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email" value="{{ user.email }}" required>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label for="cpf" class="form-label">CPF</label>
+                        <input type="text" class="form-control" id="cpf" name="cpf" value="{{ user.cpf }}" required data-mask="000.000.000-00">
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label for="phone" class="form-label">Telefone</label>
+                        <input type="text" class="form-control" id="phone" name="phone" value="{{ user.phone }}" required data-mask="(00) 00000-0000">
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label for="role" class="form-label">Cargo</label>
+                        <input type="text" class="form-control" id="role" name="role" value="{{ user.role }}" required>
+                    </div>
+                    
+                    <div class="col-md-6 d-flex align-items-center">
+                        <div class="form-check form-switch me-4">
+                            <input class="form-check-input" type="checkbox" id="is_superuser" name="is_superuser" {% if user.is_superuser %}checked{% endif %}>
+                            <label class="form-check-label" for="is_superuser">Administrador</label>
+                        </div>
+                        
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="is_active" name="is_active" {% if user.is_active %}checked{% endif %}>
+                            <label class="form-check-label" for="is_active">Ativo</label>
+                        </div>
+                    </div>
+                    
+                    <div class="col-12">
+                        <h3 class="fs-5">Selecionar Unidades</h3>
+                        <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;">
+                            <div class="row row-cols-1 row-cols-md-3 g-3">
+                                {% for unit in units %}
+                                <div class="col">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="units" value="{{ unit.id }}" id="unit{{ unit.id }}" 
+                                               {% if unit in user.units %}checked{% endif %}>
+                                        <label class="form-check-label fw-medium" for="unit{{ unit.id }}">
+                                            {{ unit.name }}
+                                        </label>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-12 mt-4">
+                        <div class="d-flex justify-content-center gap-3">
+                            <a href="{{ url_for('admin_users_list') }}" class="btn btn-outline-secondary px-4 py-2">Cancelar</a>
+                            <button type="button" class="btn btn-danger px-4 py-2" id="btnDelete">Excluir</button>
+                            <button type="submit" class="btn btn-warning px-4 py-2">Salvar</button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Form para exclusão (oculto) -->
+    <form id="deleteForm" method="post" action="{{ url_for('admin_delete_user', user_id=user.id) }}" class="d-none"></form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
+<script>
+    $(document).ready(function() {
+        $('#cpf').mask('000.000.000-00');
+        $('#phone').mask('(00) 00000-0000');
+        
+        // Toggle unidades baseado no status de superusuário
+        function toggleUnitSection() {
+            const unitSection = $('input[name="units"]').closest('.col-12');
+            if ($('#is_superuser').is(':checked')) {
+                unitSection.slideUp();
+            } else {
+                unitSection.slideDown();
+            }
+        }
+        
+        toggleUnitSection();
+        
+        $('#is_superuser').change(function() {
+            toggleUnitSection();
+            if (this.checked) {
+                $('input[name="units"]').prop('checked', false);
+            }
+        });
+        
+        // Confirmação de exclusão
+        $('#btnDelete').click(function() {
+            Swal.fire({
+                title: 'Confirma exclusão?',
+                text: "Esta ação não pode ser desfeita!",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Sim, excluir!',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    document.getElementById('deleteForm').submit();
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

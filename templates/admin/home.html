@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Administrador - Casa do Biscoito{% endblock %}
+
+{% block content %}
+<div class="container py-4 text-center">
+    <h1 class="mb-4">Administrador</h1>
+    
+    <div class="row row-cols-1 row-cols-md-3 g-4 justify-content-center">
+        <div class="col">
+            <div class="card shadow-sm h-100">
+                <div class="card-body text-center p-4">
+                    <div class="mb-3 text-warning">
+                        <i class="bi bi-person-plus-fill" style="font-size: 64px;"></i>
+                    </div>
+                    <h5 class="card-title">Cadastrar Funcionário</h5>
+                    <a href="{{ url_for('admin_create_user') }}" class="stretched-link"></a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col">
+            <div class="card shadow-sm h-100">
+                <div class="card-body text-center p-4">
+                    <div class="mb-3 text-warning">
+                        <i class="bi bi-people-fill" style="font-size: 64px;"></i>
+                    </div>
+                    <h5 class="card-title">Listar Funcionários</h5>
+                    <a href="{{ url_for('admin_users_list') }}" class="stretched-link"></a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col">
+            <div class="card shadow-sm h-100">
+                <div class="card-body text-center p-4">
+                    <div class="mb-3 text-warning">
+                        <i class="bi bi-building-add" style="font-size: 64px;"></i>
+                    </div>
+                    <h5 class="card-title">Cadastrar Unidade</h5>
+                    <a href="{{ url_for('admin_create_unit') }}" class="stretched-link"></a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col">
+            <div class="card shadow-sm h-100">
+                <div class="card-body text-center p-4">
+                    <div class="mb-3 text-warning">
+                        <i class="bi bi-shop" style="font-size: 64px;"></i>
+                    </div>
+                    <h5 class="card-title">Listar Unidades</h5>
+                    <a href="{{ url_for('admin_units_list') }}" class="stretched-link"></a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col">
+            <div class="card shadow-sm h-100">
+                <div class="card-body text-center p-4">
+                    <div class="mb-3 text-warning">
+                        <i class="bi bi-file-earmark-text" style="font-size: 64px;"></i>
+                    </div>
+                    <h5 class="card-title">Página do Funcionário</h5>
+                    <a href="{{ url_for('user_home') }}" class="stretched-link"></a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

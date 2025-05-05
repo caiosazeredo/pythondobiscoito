@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block title %}Lista de Funcionários - Casa do Biscoito{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <a href="{{ url_for('admin_home') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+        </div>
+        <h2 class="text-center mb-0">Lista de Funcionários</h2>
+        <div></div>
+    </div>
+    
+    <div class="mb-4">
+        <div class="row justify-content-center mb-3">
+            <div class="col-md-4">
+                <input type="text" id="searchInput" class="form-control" placeholder="Buscar funcionário...">
+            </div>
+        </div>
+        
+        <div class="d-flex justify-content-center mb-3">
+            <div class="form-check form-switch me-4">
+                <input class="form-check-input" type="checkbox" id="filterSuperUser">
+                <label class="form-check-label" for="filterSuperUser">Exibir apenas super usuários</label>
+            </div>
+            
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="filterActiveUser" checked>
+                <label class="form-check-label" for="filterActiveUser">Exibir apenas usuários ativos</label>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-4">
+        {% for user in users %}
+        <div class="col employee-card" 
+             data-name="{{ user.name|lower }}" 
+             data-email="{{ user.email|lower }}" 
+             data-phone="{{ user.phone|lower }}" 
+             data-cpf="{{ user.cpf|lower }}" 
+             data-role="{{ user.role|lower }}"
+             data-superuser="{{ user.is_superuser }}"
+             data-active="{{ user.is_active }}">
+            <div class="card h-100 shadow-sm employee-card">
+                <div class="card-body p-4">
+                    <div class="d-flex flex-column align-items-center mb-3">
+                        <div class="bg-warning bg-opacity-25 rounded-circle p-2 mb-2">
+                            <i class="bi bi-person-circle text-warning" style="font-size: 50px;"></i>
+                        </div>
+                        <h3 class="fs-5">{{ user.name }}</h3>
+                    </div>
+                    
+                    <p><strong>CPF:</strong> {{ user.cpf or "Não informado" }}</p>
+                    <p><strong>E-mail:</strong> {{ user.email or "Não informado" }}</p>
+                    <p><strong>Telefone:</strong> {{ user.phone or "Não informado" }}</p>
+                    <p><strong>Função:</strong> {{ user.role or "Não informado" }}</p>
+                    <p><strong>Superusuário:</strong> {{ "Sim" if user.is_superuser else "Não" }}</p>
+                    <p><strong>Ativo:</strong> {{ "Sim" if user.is_active else "Não" }}</p>
+                    
+                    <a href="{{ url_for('admin_edit_user', user_id=user.id) }}" class="stretched-link"></a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('searchInput');
+        const filterSuperUser = document.getElementById('filterSuperUser');
+        const filterActiveUser = document.getElementById('filterActiveUser');
+        const employeeCards = document.querySelectorAll('.employee-card');
+        
+        function filterCards() {
+            const searchTerm = searchInput.value.toLowerCase();
+            const showOnlySuperUsers = filterSuperUser.checked;
+            const showOnlyActiveUsers = filterActiveUser.checked;
+            
+            employeeCards.forEach(card => {
+                const name = card.dataset.name;
+                const email = card.dataset.email;
+                const phone = card.dataset.phone;
+                const cpf = card.dataset.cpf;
+                const role = card.dataset.role;
+                const isSuperUser = card.dataset.superuser === 'True';
+                const isActive = card.dataset.active === 'True';
+                
+                const matchesSearch = (
+                    name.includes(searchTerm) || 
+                    email.includes(searchTerm) || 
+                    phone.includes(searchTerm) || 
+                    cpf.includes(searchTerm) || 
+                    role.includes(searchTerm)
+                );
+                
+                const matchesSuperUser = !showOnlySuperUsers || isSuperUser;
+                const matchesActive = !showOnlyActiveUsers || isActive;
+                
+                if (matchesSearch && matchesSuperUser && matchesActive) {
+                    card.style.display = '';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+        
+        searchInput.addEventListener('input', filterCards);
+        filterSuperUser.addEventListener('change', filterCards);
+        filterActiveUser.addEventListener('change', filterCards);
+    });
+</script>
+{% endblock %}

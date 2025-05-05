@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Cadastrar Unidade - Casa do Biscoito{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="position-relative mb-4">
+        <a href="{{ url_for('admin_home') }}" class="btn btn-link text-warning position-absolute start-0">
+            <i class="bi bi-arrow-left-circle-fill fs-3"></i>
+        </a>
+        <h1 class="text-center">Cadastrar Unidade</h1>
+    </div>
+    
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <form method="post" action="{{ url_for('admin_create_unit') }}" class="card shadow-sm p-4">
+                <div class="row g-3">
+                    <div class="col-md-12">
+                        <label for="name" class="form-label">Nome da Unidade</label>
+                        <input type="text" class="form-control" id="name" name="name" required>
+                    </div>
+                    
+                    <div class="col-md-12">
+                        <label for="address" class="form-label">Endereço</label>
+                        <input type="text" class="form-control" id="address" name="address" required>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label for="phone" class="form-label">Telefone</label>
+                        <input type="text" class="form-control" id="phone" name="phone" required data-mask="(00) 00000-0000">
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label for="cashier_count" class="form-label">Quantidade de Caixas</label>
+                        <input type="number" class="form-control" id="cashier_count" name="cashier_count" value="1" min="1" max="10" required>
+                    </div>
+                    
+                    <div class="col-md-12 d-flex align-items-center">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="is_active" name="is_active" checked>
+                            <label class="form-check-label" for="is_active">Ativo</label>
+                        </div>
+                    </div>
+                    
+                    <div class="col-12 mt-4">
+                        <div class="d-flex justify-content-center gap-3">
+                            <a href="{{ url_for('admin_home') }}" class="btn btn-danger px-4 py-2">Cancelar</a>
+                            <button type="submit" class="btn btn-warning px-4 py-2">Salvar</button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
+<script>
+    $(document).ready(function() {
+        $('#phone').mask('(00) 00000-0000');
+    });
+</script>
+{% endblock %}

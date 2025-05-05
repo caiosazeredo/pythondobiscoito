@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Casa do Biscoito{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center mb-4">
+        <div class="col-md-4">
+            <div class="input-group">
+                <input type="text" id="searchInput" class="form-control" placeholder="Buscar unidade...">
+            </div>
+        </div>
+    </div>
+    
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 justify-content-center">
+        {% for unit in units %}
+        <div class="col unit-card" 
+             data-name="{{ unit.name|lower }}" 
+             data-address="{{ unit.address|lower }}" 
+             data-phone="{{ unit.phone|lower }}">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="me-3 text-warning">
+                            <i class="bi bi-shop fs-2"></i>
+                        </div>
+                        <h3 class="card-title h5 mb-0">{{ unit.name }}</h3>
+                    </div>
+                    <p class="card-text text-muted">{{ unit.address }}</p>
+                    <p class="card-text text-muted">{{ unit.phone }}</p>
+                    <a href="{{ url_for('user_cashiers', unit_id=unit.id) }}" class="stretched-link"></a>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="col-12 text-center">
+            <p>Nenhuma unidade encontrada.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('searchInput');
+        const unitCards = document.querySelectorAll('.unit-card');
+        
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            
+            unitCards.forEach(card => {
+                const name = card.dataset.name;
+                const address = card.dataset.address;
+                const phone = card.dataset.phone;
+                
+                if (name.includes(searchTerm) || 
+                    address.includes(searchTerm) || 
+                    phone.includes(searchTerm)) {
+                    card.style.display = '';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

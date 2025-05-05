@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Lista de Unidades - Casa do Biscoito{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <a href="{{ url_for('admin_home') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+        </div>
+        <h2 class="text-center mb-0">Listar Unidades</h2>
+        <div></div>
+    </div>
+    
+    <div class="row justify-content-center mb-4">
+        <div class="col-md-4">
+            <input type="text" id="searchInput" class="form-control" placeholder="Buscar unidade...">
+        </div>
+    </div>
+    
+    <div class="d-flex justify-content-center mb-4">
+        <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="filterActive" checked>
+            <label class="form-check-label" for="filterActive">Mostrar apenas unidades ativas</label>
+        </div>
+    </div>
+    
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 justify-content-center">
+        {% for unit in units %}
+        <div class="col unit-card" 
+             data-name="{{ unit.name|lower }}" 
+             data-address="{{ unit.address|lower }}" 
+             data-phone="{{ unit.phone|lower }}" 
+             data-active="{{ unit.is_active }}">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="me-3 text-warning">
+                            <i class="bi bi-shop fs-2"></i>
+                        </div>
+                        <h3 class="card-title h5 mb-0">{{ unit.name }}</h3>
+                    </div>
+                    <p class="card-text text-muted">{{ unit.address }}</p>
+                    <p class="card-text text-muted">{{ unit.phone }}</p>
+                    <p class="card-text {{ 'text-success' if unit.is_active else 'text-danger' }}">
+                        {{ "Ativo" if unit.is_active else "Inativo" }}
+                    </p>
+                    <a href="{{ url_for('admin_edit_unit', unit_id=unit.id) }}" class="stretched-link"></a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('searchInput');
+        const filterActive = document.getElementById('filterActive');
+        const unitCards = document.querySelectorAll('.unit-card');
+        
+        function filterCards() {
+            const searchTerm = searchInput.value.toLowerCase();
+            const showOnlyActive = filterActive.checked;
+            
+            unitCards.forEach(card => {
+                const name = card.dataset.name;
+                const address = card.dataset.address;
+                const phone = card.dataset.phone;
+                const isActive = card.dataset.active === 'True';
+                
+                const matchesSearch = (
+                    name.includes(searchTerm) || 
+                    address.includes(searchTerm) || 
+                    phone.includes(searchTerm)
+                );
+                
+                const matchesActive = !showOnlyActive || isActive;
+                
+                if (matchesSearch && matchesActive) {
+                    card.style.display = '';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+        
+        searchInput.addEventListener('input', filterCards);
+        filterActive.addEventListener('change', filterCards);
+    });
+</script>
+{% endblock %}
