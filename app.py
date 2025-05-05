@@ -8,6 +8,7 @@ import pymysql
 from pymysql.cursors import DictCursor
 from config import Config
 from flask_mail import Mail, Message
+from decimal import Decimal
 
 # Inicialização do app
 app = Flask(__name__)
@@ -805,6 +806,12 @@ def admin_create_unit():
             )
             unit_id = cursor.lastrowid
             
+            # Criar o Caixa Financeiro (número = 0)
+            cursor.execute(
+                "INSERT INTO cashier (unit_id, number, status) VALUES (%s, %s, %s)",
+                (unit_id, 0, 'aberto')
+            )
+            
             # Criar caixas para a unidade
             for i in range(1, cashier_count + 1):
                 cursor.execute(
@@ -815,6 +822,12 @@ def admin_create_unit():
             # Criar controle de moedas para a unidade
             cursor.execute(
                 "INSERT INTO coins_control (unit_id, total_amount) VALUES (%s, %s)",
+                (unit_id, 0)
+            )
+            
+            # Inicializar um valor para o pote
+            cursor.execute(
+                "INSERT INTO pot_control (unit_id, amount) VALUES (%s, %s)",
                 (unit_id, 0)
             )
             
@@ -951,7 +964,8 @@ def user_coins_control(unit_id):
         
         if action == 'add':
             amount = float(request.form.get('amount', 0))
-            new_total = coins_control['total_amount'] + amount
+            # Corrigir o problema de tipos convertendo para Decimal
+            new_total = coins_control['total_amount'] + Decimal(str(amount))
             
             cursor.execute(
                 "UPDATE coins_control SET total_amount = %s, updated_at = %s WHERE id = %s",
@@ -1017,7 +1031,6 @@ def user_home():
     conn.close()
     return render_template('user/home.html', units=units)
 
-# Modificar a rota de listagem de caixas para incluir resumo financeiro
 @app.route('/user/unit/<int:unit_id>/cashiers')
 @login_required
 def user_cashiers(unit_id):
@@ -1052,7 +1065,7 @@ def user_cashiers(unit_id):
     if request.args.get('create') == 'true' and current_user.is_superuser:
         # Obter o próximo número disponível para o caixa
         cursor.execute(
-            "SELECT MAX(number) as last_number FROM cashier WHERE unit_id = %s",
+            "SELECT MAX(number) as last_number FROM cashier WHERE unit_id = %s AND number > 0",
             (unit_id,)
         )
         result = cursor.fetchone()
@@ -1077,6 +1090,43 @@ def user_cashiers(unit_id):
     )
     cashiers = cursor.fetchall()
     
+    # Obter ou criar o ID do Caixa Financeiro
+    financial_cashier_id = None
+    has_financial_cashier = False
+    
+    for cashier in cashiers:
+        if cashier['number'] == 0:
+            financial_cashier_id = cashier['id']
+            has_financial_cashier = True
+            break
+    
+    # Se não encontrou o caixa financeiro, criar um
+    if not has_financial_cashier:
+        try:
+            cursor.execute(
+                "INSERT INTO cashier (unit_id, number, status) VALUES (%s, %s, %s)",
+                (unit_id, 0, 'aberto')
+            )
+            conn.commit()
+            financial_cashier_id = cursor.lastrowid
+            
+            # Adicionar o novo caixa à lista
+            cursor.execute("SELECT * FROM cashier WHERE id = %s", (financial_cashier_id,))
+            new_cashier = cursor.fetchone()
+            if new_cashier:
+                cashiers.append(new_cashier)
+                
+            flash('Caixa Financeiro criado automaticamente.', 'info')
+        except Exception as e:
+            conn.rollback()
+            flash(f'Erro ao criar Caixa Financeiro: {str(e)}', 'error')
+    
+    # Verificação de fallback para garantir que temos um ID válido
+    if financial_cashier_id is None:
+        # Cria um ID fictício para evitar erros de renderização
+        financial_cashier_id = 0  # ID que será usado como fallback
+        flash('Problema ao acessar o Caixa Financeiro. Por favor, contate o administrador.', 'error')
+    
     # Obter valor base mensal da unidade para o mês atual
     today = datetime.now()
     cursor.execute(
@@ -1089,7 +1139,21 @@ def user_cashiers(unit_id):
     # Obter o controle de moedas
     cursor.execute("SELECT * FROM coins_control WHERE unit_id = %s", (unit_id,))
     coins_control = cursor.fetchone()
-    coins_amount = coins_control['total_amount'] if coins_control else 0
+    coins_amount = 0
+    
+    if coins_control:
+        coins_amount = coins_control['total_amount']
+    else:
+        # Criar controle de moedas se não existir
+        try:
+            cursor.execute(
+                "INSERT INTO coins_control (unit_id, total_amount) VALUES (%s, %s)",
+                (unit_id, 0)
+            )
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            flash(f'Erro ao criar controle de moedas: {str(e)}', 'error')
     
     # Obter totais de movimentos do dia para cada caixa
     start_date = datetime(today.year, today.month, today.day, 0, 0, 0)
@@ -1159,7 +1223,191 @@ def user_cashiers(unit_id):
         saldo_dia=saldo_dia,
         base_amount=base_amount,
         coins_amount=coins_amount,
-        financial_balance=financial_balance
+        financial_balance=financial_balance,
+        financial_cashier_id=financial_cashier_id
+    )
+@app.route('/user/unit/<int:unit_id>/cashiers')
+@login_required
+def user_cashiers(unit_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Verificar se a unidade existe
+    cursor.execute("SELECT * FROM unit WHERE id = %s", (unit_id,))
+    unit = cursor.fetchone()
+    
+    if not unit:
+        cursor.close()
+        conn.close()
+        flash('Unidade não encontrada!', 'error')
+        return redirect(url_for('user_home'))
+    
+    # Verificar se o usuário tem acesso à unidade
+    if not current_user.is_superuser:
+        cursor.execute(
+            "SELECT * FROM user_unit WHERE user_id = %s AND unit_id = %s",
+            (current_user.id, unit_id)
+        )
+        has_access = cursor.fetchone() is not None
+        
+        if not has_access:
+            cursor.close()
+            conn.close()
+            flash('Acesso não autorizado a esta unidade!', 'error')
+            return redirect(url_for('user_home'))
+    
+    # Verificar se o Caixa Financeiro existe e criar se não existir
+    cursor.execute(
+        "SELECT * FROM cashier WHERE unit_id = %s AND number = 0",
+        (unit_id,)
+    )
+    financial_cashier = cursor.fetchone()
+    financial_cashier_id = None
+    
+    if financial_cashier:
+        financial_cashier_id = financial_cashier['id']
+    else:
+        # Criar o Caixa Financeiro
+        try:
+            cursor.execute(
+                "INSERT INTO cashier (unit_id, number, status) VALUES (%s, %s, %s)",
+                (unit_id, 0, 'aberto')
+            )
+            conn.commit()
+            financial_cashier_id = cursor.lastrowid
+        except Exception as e:
+            conn.rollback()
+            flash(f'Erro ao criar Caixa Financeiro: {str(e)}', 'error')
+    
+    # Verificar se é para criar um novo caixa
+    if request.args.get('create') == 'true' and current_user.is_superuser:
+        # Obter o próximo número disponível para o caixa
+        cursor.execute(
+            "SELECT MAX(number) as last_number FROM cashier WHERE unit_id = %s AND number > 0",
+            (unit_id,)
+        )
+        result = cursor.fetchone()
+        next_number = 1 if not result or result['last_number'] is None else result['last_number'] + 1
+        
+        # Criar o novo caixa
+        try:
+            cursor.execute(
+                "INSERT INTO cashier (unit_id, number, status) VALUES (%s, %s, %s)",
+                (unit_id, next_number, 'fechado')
+            )
+            conn.commit()
+            flash(f'Caixa {next_number} criado com sucesso!', 'success')
+        except Exception as e:
+            conn.rollback()
+            flash(f'Erro ao criar caixa: {str(e)}', 'error')
+    
+    # Obter todos os caixas da unidade
+    cursor.execute(
+        "SELECT * FROM cashier WHERE unit_id = %s ORDER BY number",
+        (unit_id,)
+    )
+    cashiers = cursor.fetchall()
+    
+    # Obter valor base mensal da unidade para o mês atual
+    today = datetime.now()
+    cursor.execute(
+        "SELECT * FROM monthly_base_amount WHERE unit_id = %s AND month = %s AND year = %s",
+        (unit_id, today.month, today.year)
+    )
+    monthly_base = cursor.fetchone()
+    base_amount = monthly_base['amount'] if monthly_base else 0
+    
+    # Obter o controle de moedas
+    cursor.execute("SELECT * FROM coins_control WHERE unit_id = %s", (unit_id,))
+    coins_control = cursor.fetchone()
+    coins_amount = coins_control['total_amount'] if coins_control else 0
+    
+    # Criar controle de moedas se não existir
+    if not coins_control:
+        try:
+            cursor.execute(
+                "INSERT INTO coins_control (unit_id, total_amount) VALUES (%s, %s)",
+                (unit_id, 0)
+            )
+            conn.commit()
+            coins_amount = 0
+        except Exception as e:
+            conn.rollback()
+            flash(f'Erro ao criar controle de moedas: {str(e)}', 'error')
+    
+    # Obter totais de movimentos do dia para cada caixa
+    start_date = datetime(today.year, today.month, today.day, 0, 0, 0)
+    end_date = datetime(today.year, today.month, today.day, 23, 59, 59)
+    
+    cashier_totals = {}
+    for cashier in cashiers:
+        cursor.execute(
+            "SELECT SUM(CASE WHEN type = 'entrada' AND payment_status = 'realizado' THEN amount ELSE 0 END) as total_entrada, "
+            "SUM(CASE WHEN type = 'saida' OR type = 'despesa_loja' OR type = 'estorno' THEN amount ELSE 0 END) as total_saida "
+            "FROM movement "
+            "WHERE cashier_id = %s AND created_at BETWEEN %s AND %s",
+            (cashier['id'], start_date, end_date)
+        )
+        result = cursor.fetchone()
+        
+        if result:
+            entrada = result['total_entrada'] or 0
+            saida = result['total_saida'] or 0
+            cashier_totals[cashier['id']] = {
+                'entrada': entrada,
+                'saida': saida,
+                'saldo': entrada - saida
+            }
+        else:
+            cashier_totals[cashier['id']] = {'entrada': 0, 'saida': 0, 'saldo': 0}
+    
+    # Obter totais gerais
+    cursor.execute(
+        "SELECT SUM(CASE WHEN type = 'entrada' AND payment_status = 'realizado' THEN amount ELSE 0 END) as total_entrada, "
+        "SUM(CASE WHEN type = 'saida' OR type = 'despesa_loja' OR type = 'estorno' THEN amount ELSE 0 END) as total_saida "
+        "FROM movement "
+        "WHERE cashier_id IN (SELECT id FROM cashier WHERE unit_id = %s) "
+        "AND created_at BETWEEN %s AND %s",
+        (unit_id, start_date, end_date)
+    )
+    totals = cursor.fetchone()
+    
+    total_entrada = totals['total_entrada'] or 0
+    total_saida = totals['total_saida'] or 0
+    saldo_dia = total_entrada - total_saida
+    
+    # Calcular saldo do caixa financeiro
+    cursor.execute(
+        "SELECT SUM(CASE WHEN type = 'entrada' AND payment_status = 'realizado' THEN amount ELSE 0 END) as total_entrada, "
+        "SUM(CASE WHEN type = 'saida' OR type = 'despesa_loja' OR type = 'estorno' THEN amount ELSE 0 END) as total_saida "
+        "FROM movement "
+        "WHERE cashier_id IN (SELECT id FROM cashier WHERE unit_id = %s)",
+        (unit_id,)
+    )
+    all_time_totals = cursor.fetchone()
+    
+    all_time_entrada = all_time_totals['total_entrada'] or 0
+    all_time_saida = all_time_totals['total_saida'] or 0
+    financial_balance = all_time_entrada - all_time_saida
+    
+    cursor.close()
+    conn.close()
+    
+    # Verifique se financial_cashier_id está definido corretamente
+    print(f"DEBUG: financial_cashier_id = {financial_cashier_id}")
+    
+    return render_template(
+        'user/cashiers.html',
+        unit=unit,
+        cashiers=cashiers,
+        cashier_totals=cashier_totals,
+        total_entrada=total_entrada,
+        total_saida=total_saida,
+        saldo_dia=saldo_dia,
+        base_amount=base_amount,
+        coins_amount=coins_amount,
+        financial_balance=financial_balance,
+        financial_cashier_id=financial_cashier_id
     )
 
 # Modificar a rota de movimentos para incluir despesas da loja e estornos
@@ -1206,6 +1454,9 @@ def user_movements(unit_id, cashier_id):
         flash('Caixa não encontrado ou não pertence a esta unidade!', 'error')
         return redirect(url_for('user_cashiers', unit_id=unit_id))
     
+    # Verificar se é o Caixa Financeiro (número 0)
+    is_financial_cashier = cashier['number'] == 0
+    
     # Obter data para filtrar movimentos
     date_str = request.args.get('date')
     if date_str:
@@ -1222,6 +1473,7 @@ def user_movements(unit_id, cashier_id):
     # Obter movimentos do dia
     start_date = datetime(date_obj.year, date_obj.month, date_obj.day, 0, 0, 0)
     end_date = datetime(date_obj.year, date_obj.month, date_obj.day, 23, 59, 59)
+    date_obj_date = date_obj.date()
     
     cursor.execute(
         "SELECT m.*, pm.name as payment_method_name, pm.category as payment_method_category "
@@ -1255,13 +1507,98 @@ def user_movements(unit_id, cashier_id):
     monthly_base = cursor.fetchone()
     base_amount = monthly_base['amount'] if monthly_base else 0
     
+    # Obter ou criar campos específicos do documento do cliente
+    
+    # Campo "devo" (devoluções/cancelamentos)
+    cursor.execute(
+        "SELECT SUM(devo_value) as total_devo FROM devo_values WHERE cashier_id = %s AND date = %s",
+        (cashier_id, date_obj_date)
+    )
+    devo_result = cursor.fetchone()
+    devo_total = devo_result['total_devo'] if devo_result and devo_result['total_devo'] else 0
+    
+    # Calcular vendas totais do dia (Campo T)
+    cursor.execute(
+        "SELECT SUM(amount) as total_t FROM movement WHERE cashier_id = %s AND type = 'entrada' AND payment_status = 'realizado' AND created_at BETWEEN %s AND %s",
+        (cashier_id, start_date, end_date)
+    )
+    t_result = cursor.fetchone()
+    t_total = (t_result['total_t'] if t_result and t_result['total_t'] else 0) - devo_total
+    
+    # Obter valor Z (relatório do PDV)
+    cursor.execute(
+        "SELECT z_value FROM pdv_z_values WHERE cashier_id = %s AND date = %s",
+        (cashier_id, date_obj_date)
+    )
+    z_result = cursor.fetchone()
+    z_total = z_result['z_value'] if z_result and z_result['z_value'] else 0
+    
+    # Calcular diferença (T - Z)
+    dif_total = t_total - z_total
+    
+    # Obter valor do pote (apenas para Caixa Financeiro)
+    pot_amount = 0
+    if is_financial_cashier:
+        cursor.execute("SELECT amount FROM pot_control WHERE unit_id = %s", (unit_id,))
+        pot_result = cursor.fetchone()
+        pot_amount = pot_result['amount'] if pot_result else 0
+    
     # Para o formulário de adição de movimentos
     if request.method == 'POST':
+        # Se for uma atualização do valor "devo"
+        if 'devo_value' in request.form:
+            devo_value = float(request.form.get('devo_value', 0))
+            reason = request.form.get('devo_reason', '')
+            
+            cursor.execute(
+                "INSERT INTO devo_values (cashier_id, devo_value, date, reason) VALUES (%s, %s, %s, %s) "
+                "ON DUPLICATE KEY UPDATE devo_value = %s, reason = %s",
+                (cashier_id, devo_value, date_obj_date, reason, devo_value, reason)
+            )
+            conn.commit()
+            
+            flash('Valor de cancelamento registrado com sucesso!', 'success')
+            return redirect(url_for('user_movements', unit_id=unit_id, cashier_id=cashier_id, date=date_formatted))
+        
+        # Se for uma atualização do valor Z
+        elif 'z_value' in request.form:
+            z_value = float(request.form.get('z_value', 0))
+            
+            cursor.execute(
+                "INSERT INTO pdv_z_values (cashier_id, z_value, date) VALUES (%s, %s, %s) "
+                "ON DUPLICATE KEY UPDATE z_value = %s",
+                (cashier_id, z_value, date_obj_date, z_value)
+            )
+            conn.commit()
+            
+            flash('Valor Z atualizado com sucesso!', 'success')
+            return redirect(url_for('user_movements', unit_id=unit_id, cashier_id=cashier_id, date=date_formatted))
+        
+        # Se for uma atualização do pote
+        elif 'pot_amount' in request.form:
+            amount = float(request.form.get('pot_amount', 0))
+            
+            cursor.execute(
+                "INSERT INTO pot_control (unit_id, amount) VALUES (%s, %s) "
+                "ON DUPLICATE KEY UPDATE amount = %s",
+                (unit_id, amount, amount)
+            )
+            conn.commit()
+            
+            flash('Valor do Pote atualizado com sucesso!', 'success')
+            return redirect(url_for('user_movements', unit_id=unit_id, cashier_id=cashier_id, date=date_formatted))
+        
+        # Caso padrão: registro de movimentação
         movement_type = request.form.get('type')
         amount = float(request.form.get('amount'))
         payment_method_id = request.form.get('payment_method')
-        description = request.form.get('description')
+        description = request.form.get('description', '')
         payment_status = request.form.get('payment_status', 'realizado')
+        
+        # Para o Caixa Financeiro - tratamento especial para entradas
+        if is_financial_cashier and movement_type == 'entrada':
+            entry_type = request.form.get('entry_type', 'dinheiro')
+            description = f"{entry_type.capitalize()}: {description}"
         
         # Para despesas da loja, obter a categoria
         expense_category_id = None
@@ -1320,8 +1657,9 @@ def user_movements(unit_id, cashier_id):
                             (unit_id, coins_in - coins_out)
                         )
                     else:
-                        # Atualizar controle existente
-                        new_total = coins_control['total_amount'] + coins_in - coins_out
+                        # Converter para decimal para evitar o erro de tipo
+                        from decimal import Decimal
+                        new_total = coins_control['total_amount'] + Decimal(str(coins_in)) - Decimal(str(coins_out))
                         cursor.execute(
                             "UPDATE coins_control SET total_amount = %s, updated_at = %s WHERE id = %s",
                             (new_total, datetime.now(), coins_control['id'])
@@ -1373,6 +1711,27 @@ def user_movements(unit_id, cashier_id):
     if financial_result:
         financial_balance = (financial_result['total_entrada'] or 0) - (financial_result['total_saida'] or 0)
     
+    # Obter saldos de cartões do dia para exibir no resumo
+    cursor.execute(
+        "SELECT pm.category, SUM(m.amount) as total "
+        "FROM movement m "
+        "JOIN payment_method pm ON m.payment_method = pm.id "
+        "WHERE m.cashier_id = %s AND m.type = 'entrada' AND m.payment_status = 'realizado' "
+        "AND m.created_at BETWEEN %s AND %s "
+        "GROUP BY pm.category",
+        (cashier_id, start_date, end_date)
+    )
+    payment_category_totals = {}
+    payment_results = cursor.fetchall()
+    
+    for result in payment_results:
+        payment_category_totals[result['category']] = result['total']
+    
+    # Obter dados de moedas
+    cursor.execute("SELECT total_amount FROM coins_control WHERE unit_id = %s", (unit_id,))
+    coins_result = cursor.fetchone()
+    coins_total = coins_result['total_amount'] if coins_result else 0
+    
     cursor.close()
     conn.close()
     
@@ -1390,7 +1749,15 @@ def user_movements(unit_id, cashier_id):
         total_estorno=total_estorno,
         total_despesa=total_despesa,
         financial_balance=financial_balance,
-        base_amount=base_amount
+        base_amount=base_amount,
+        devo_total=devo_total,
+        t_total=t_total,
+        z_total=z_total,
+        dif_total=dif_total,
+        pot_amount=pot_amount,
+        is_financial_cashier=is_financial_cashier,
+        payment_category_totals=payment_category_totals,
+        coins_total=coins_total
     )
 
 # Rota para obter métodos de pagamento via AJAX

@@ -39,6 +39,36 @@
                     </form>
                 </div>
             </div>
+            
+            <div class="card shadow-sm mt-4">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0">Histórico de Valores Base</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-striped mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Mês/Ano</th>
+                                    <th class="text-end">Valor Base</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in base_history %}
+                                <tr>
+                                    <td>{{ calendar.month_name[item.month] }}/{{ item.year }}</td>
+                                    <td class="text-end fw-bold">R$ {{ "%.2f"|format(item.amount) }}</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="2" class="text-center py-3">Nenhum histórico disponível</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>

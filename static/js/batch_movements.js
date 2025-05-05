@@ -9,6 +9,10 @@ document.addEventListener('DOMContentLoaded', function() {
         return; // Sair se não estiver na página correta
     }
     
+    // Remover ouvintes de eventos existentes para evitar duplicação
+    const newAddEntryBtn = addEntryBtn.cloneNode(true);
+    addEntryBtn.parentNode.replaceChild(newAddEntryBtn, addEntryBtn);
+    
     let entryCount = 0;
     let lastPaymentMethod = null;
     
@@ -156,7 +160,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Adicionar primeira entrada ao carregar a página
-    addEntryBtn.addEventListener('click', addBatchEntry);
+    newAddEntryBtn.addEventListener('click', addBatchEntry);
     
     // Adicionar entrada inicial
     addBatchEntry();
