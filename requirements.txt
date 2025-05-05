@@ -8,3 +8,4 @@ python-dotenv==1.0.0
 cryptography==41.0.3
 Werkzeug==2.3.7
 bootstrap-flask==2.3.0
+flask-mail==0.9.1

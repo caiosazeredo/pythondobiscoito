@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Solicitar Redefinição de Senha - Casa do Biscoito{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-center align-items-center" style="height: 90vh;">
+    <div class="card shadow-sm" style="width: 500px;">
+        <div class="card-body p-4">
+            <div class="text-center mb-4">
+                <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo" class="img-fluid mb-3" style="max-width: 150px;">
+                <h1 class="text-warning fw-bold">Redefinir Senha</h1>
+                <p class="text-muted">Informe seu e-mail para receber instruções de redefinição de senha.</p>
+            </div>
+            
+            <form method="post" action="{{ url_for('reset_password_request') }}">
+                <div class="mb-3">
+                    <label for="email" class="form-label">Email</label>
+                    <input type="email" class="form-control" id="email" name="email" required>
+                </div>
+                
+                <button type="submit" class="btn btn-warning w-100 py-2 mb-3">ENVIAR INSTRUÇÕES</button>
+                
+                <div class="text-center">
+                    <a href="{{ url_for('login') }}" class="btn btn-link text-warning">Voltar para o login</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

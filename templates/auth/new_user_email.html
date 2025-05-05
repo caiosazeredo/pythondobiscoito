@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Bem-vindo à Casa do Biscoito</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .logo {
+            max-width: 150px;
+        }
+        .password-box {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+            margin: 20px 0;
+            font-size: 24px;
+            letter-spacing: 3px;
+            font-weight: bold;
+        }
+        .button {
+            display: inline-block;
+            background-color: #FEC32E;
+            color: #000;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+        .footer {
+            margin-top: 30px;
+            font-size: 12px;
+            color: #666;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="cid:logo" alt="Casa do Biscoito" class="logo">
+            <h2>Bem-vindo à Casa do Biscoito!</h2>
+        </div>
+        
+        <p>Olá, {{ name }}!</p>
+        
+        <p>Sua conta na plataforma Casa do Biscoito foi criada com sucesso. Você pode acessar o sistema com as seguintes credenciais:</p>
+        
+        <p><strong>Email:</strong> Seu email cadastrado</p>
+        <p><strong>Senha temporária:</strong></p>
+        
+        <div class="password-box">
+            {{ password }}
+        </div>
+        
+        <p>Por razões de segurança, recomendamos que você altere sua senha após o primeiro acesso.</p>
+        
+        <p style="text-align: center;">
+            <a href="{{ login_url }}" class="button">ACESSAR O SISTEMA</a>
+        </p>
+        
+        <p>Atenciosamente,<br>
+        Equipe Casa do Biscoito</p>
+        
+        <div class="footer">
+            <p>Este é um e-mail automático, por favor não responda.</p>
+        </div>
+    </div>
+</body>
+</html>
