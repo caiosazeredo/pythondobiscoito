@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}Controle de Moedas - {{ unit.name }} - Casa do Biscoito{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="position-relative mb-4">
+        <a href="{{ url_for('user_cashiers', unit_id=unit.id) }}" class="btn btn-link text-warning position-absolute start-0">
+            <i class="bi bi-arrow-left-circle-fill fs-3"></i>
+        </a>
+        <h1 class="text-center">Controle de Moedas</h1>
+        <h5 class="text-center text-muted">{{ unit.name }}</h5>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-5">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0">Gerenciar Moedas</h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-center align-items-center mb-4">
+                        <div class="text-center">
+                            <div class="fs-1 text-warning">
+                                <i class="bi bi-coin"></i>
+                            </div>
+                            <h3 class="mb-0">R$ {{ "%.2f"|format(coins_control.total_amount) }}</h3>
+                            <div class="text-muted small">
+                                {% if coins_control.last_deposit_date %}
+                                Último depósito: {{ coins_control.last_deposit_date.strftime('%d/%m/%Y %H:%M') }}
+                                {% else %}
+                                Nenhum depósito registrado
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <form method="post" action="{{ url_for('user_coins_control', unit_id=unit.id) }}" class="mb-3">
+                        <input type="hidden" name="action" value="add">
+                        <div class="mb-3">
+                            <label for="amount" class="form-label">Adicionar Moedas</label>
+                            <div class="input-group">
+                                <span class="input-group-text">R$</span>
+                                <input type="number" class="form-control" id="amount" name="amount" step="0.01" min="0.01" required>
+                                <button type="submit" class="btn btn-warning">
+                                    <i class="bi bi-plus-lg"></i> Adicionar
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                    
+                    <form method="post" action="{{ url_for('user_coins_control', unit_id=unit.id) }}" onsubmit="return confirmDeposit()">
+                        <input type="hidden" name="action" value="deposit">
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-outline-warning">
+                                <i class="bi bi-bank me-2"></i> Moedas foram depositadas ou trocadas
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-7">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0">Histórico de Moedas</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-striped mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Ação</th>
+                                    <th class="text-end">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for entry in coins_history %}
+                                <tr>
+                                    <td>{{ entry.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                                    <td>
+                                        {% if entry.action == 'add' %}
+                                        <span class="badge bg-success">Adição</span>
+                                        {% elif entry.action == 'deposit' %}
+                                        <span class="badge bg-primary">Depósito</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">{{ entry.action }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">R$ {{ "%.2f"|format(entry.amount) }}</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="3" class="text-center py-3">Nenhum registro encontrado</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function confirmDeposit() {
+        return confirm('Tem certeza que deseja registrar o depósito/troca de moedas? O valor será zerado.');
+    }
+</script>
+{% endblock %}

@@ -23,6 +23,9 @@
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab" aria-controls="history" aria-selected="false">Histórico</button>
                 </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="batch-tab" data-bs-toggle="tab" data-bs-target="#batch" type="button" role="tab" aria-controls="batch" aria-selected="false">Registro em Lote</button>
+                </li>
             </ul>
             
             <div class="tab-content" id="movementTabsContent">
@@ -35,7 +38,7 @@
                                     <form method="post" action="{{ url_for('user_movements', unit_id=unit.id, cashier_id=cashier.id) }}">
                                         <div class="mb-3">
                                             <label class="form-label">Tipo de Movimentação</label>
-                                            <div class="d-flex gap-3">
+                                            <div class="d-flex gap-3 flex-wrap">
                                                 <div class="form-check">
                                                     <input class="form-check-input" type="radio" name="type" id="typeEntrada" value="entrada" checked>
                                                     <label class="form-check-label" for="typeEntrada">
@@ -43,9 +46,15 @@
                                                     </label>
                                                 </div>
                                                 <div class="form-check">
-                                                    <input class="form-check-input" type="radio" name="type" id="typeSaida" value="saida">
-                                                    <label class="form-check-label" for="typeSaida">
-                                                        Saída
+                                                    <input class="form-check-input" type="radio" name="type" id="typeEstorno" value="estorno">
+                                                    <label class="form-check-label" for="typeEstorno">
+                                                        Estorno
+                                                    </label>
+                                                </div>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="radio" name="type" id="typeDespesa" value="despesa_loja">
+                                                    <label class="form-check-label" for="typeDespesa">
+                                                        Despesa da Loja
                                                     </label>
                                                 </div>
                                             </div>
@@ -69,13 +78,56 @@
                                             </div>
                                         </div>
                                         
+                                        <!-- Container para categorias de despesa -->
+                                        <div class="mb-3" id="expenseCategoryContainer" style="display: none;">
+                                            <label for="expense_category" class="form-label">Categoria de Despesa</label>
+                                            <select class="form-select" id="expense_category" name="expense_category">
+                                                <option value="">Selecione uma categoria</option>
+                                                <optgroup label="Despesas Fixas">
+                                                    {% for category in expense_categories %}
+                                                        {% if category.type == 'fixa' %}
+                                                        <option value="{{ category.id }}">{{ category.name }}</option>
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                </optgroup>
+                                                <optgroup label="Sócios">
+                                                    {% for category in expense_categories %}
+                                                        {% if category.type == 'socio' %}
+                                                        <option value="{{ category.id }}">{{ category.name }}</option>
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                </optgroup>
+                                                <optgroup label="Fornecedores">
+                                                    {% for category in expense_categories %}
+                                                        {% if category.type == 'fornecedor' %}
+                                                        <option value="{{ category.id }}">{{ category.name }}</option>
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                </optgroup>
+                                                <optgroup label="Extras">
+                                                    {% for category in expense_categories %}
+                                                        {% if category.type == 'extra' %}
+                                                        <option value="{{ category.id }}">{{ category.name }}</option>
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                </optgroup>
+                                            </select>
+                                        </div>
+                                        
                                         <div class="mb-3">
-                                            <label for="payment_method" class="form-label">Forma de Pagamento</label>
-                                            <select class="form-select" id="payment_method" name="payment_method" required>
+                                            <label for="payment_method_main" class="form-label">Forma de Pagamento</label>
+                                            <select class="form-select" id="payment_method_main" required>
                                                 <option value="">Selecione</option>
-                                                {% for method in payment_methods %}
+                                                {% for method in payment_methods_main %}
                                                 <option value="{{ method.id }}" data-category="{{ method.category }}">{{ method.name }}</option>
                                                 {% endfor %}
+                                            </select>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label for="payment_method" class="form-label">Detalhamento</label>
+                                            <select class="form-select" id="payment_method" name="payment_method" required>
+                                                <option value="">Selecione o tipo de pagamento primeiro</option>
                                             </select>
                                         </div>
                                         
@@ -129,14 +181,22 @@
                         </div>
                         
                         <div class="col-md-4">
+                            <div class="card shadow-sm bg-light mb-4">
+                                <div class="card-body">
+                                    <h5 class="card-title mb-3">Valor Base</h5>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span>Valor Base (Mensal):</span>
+                                        <span class="fw-bold">R$ {{ "%.2f"|format(base_amount) }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        
                             <div class="card shadow-sm bg-light">
                                 <div class="card-body">
                                     <h5 class="card-title mb-3">Resumo do Dia</h5>
                                     
                                     <div class="small text-muted mb-2">Valores por Categoria:</div>
                                     
-                                    {% set total_entrada = {'value': 0} %}
-                                    {% set total_saida = {'value': 0} %}
                                     {% set totals = {'dinheiro': 0, 'credito': 0, 'debito': 0, 'pix': 0, 'ticket': 0} %}
                                     
                                     {% for mov in movements %}
@@ -146,9 +206,6 @@
                                                     {% if method.category in totals %}
                                                         {% set _ = totals.update({method.category: totals[method.category] + mov.amount}) %}
                                                     {% endif %}
-                                                    {% set _ = total_entrada.update({'value': total_entrada.value + mov.amount}) %}
-                                                {% elif mov.type == 'saida' %}
-                                                    {% set _ = total_saida.update({'value': total_saida.value + mov.amount}) %}
                                                 {% endif %}
                                             {% endif %}
                                         {% endfor %}
@@ -167,20 +224,34 @@
                                     
                                     <div class="d-flex justify-content-between align-items-center fw-bold">
                                         <span>Total Entradas:</span>
-                                        <span class="text-success">R$ {{ "%.2f"|format(total_entrada.value) }}</span>
+                                        <span class="text-success">R$ {{ "%.2f"|format(total_entrada) }}</span>
                                     </div>
                                     
                                     <div class="d-flex justify-content-between align-items-center fw-bold">
-                                        <span>Total Saídas:</span>
-                                        <span class="text-danger">R$ {{ "%.2f"|format(total_saida.value) }}</span>
+                                        <span>Total Estornos:</span>
+                                        <span class="text-danger">R$ {{ "%.2f"|format(total_estorno) }}</span>
+                                    </div>
+                                    
+                                    <div class="d-flex justify-content-between align-items-center fw-bold">
+                                        <span>Total Despesas:</span>
+                                        <span class="text-danger">R$ {{ "%.2f"|format(total_despesa) }}</span>
                                     </div>
                                     
                                     <hr>
                                     
                                     <div class="d-flex justify-content-between align-items-center fw-bold">
                                         <span>Saldo do Dia:</span>
-                                        <span class="{{ 'text-success' if total_entrada.value - total_saida.value >= 0 else 'text-danger' }}">
-                                            R$ {{ "%.2f"|format(total_entrada.value - total_saida.value) }}
+                                        <span class="{{ 'text-success' if total_entrada - total_estorno - total_despesa >= 0 else 'text-danger' }}">
+                                            R$ {{ "%.2f"|format(total_entrada - total_estorno - total_despesa) }}
+                                        </span>
+                                    </div>
+                                    
+                                    <hr>
+                                    
+                                    <div class="d-flex justify-content-between align-items-center fw-bold">
+                                        <span>Saldo do Caixa Financeiro:</span>
+                                        <span class="{{ 'text-success' if financial_balance >= 0 else 'text-danger' }}">
+                                            R$ {{ "%.2f"|format(financial_balance + base_amount) }}
                                         </span>
                                     </div>
                                 </div>
@@ -209,9 +280,15 @@
                                 <tr>
                                     <td>{{ mov.created_at.strftime('%H:%M') }}</td>
                                     <td>
-                                        <span class="badge {{ 'bg-success' if mov.type == 'entrada' else 'bg-danger' }}">
-                                            {{ "Entrada" if mov.type == 'entrada' else "Saída" }}
-                                        </span>
+                                        {% if mov.type == 'entrada' %}
+                                        <span class="badge bg-success">Entrada</span>
+                                        {% elif mov.type == 'estorno' %}
+                                        <span class="badge bg-danger">Estorno</span>
+                                        {% elif mov.type == 'despesa_loja' %}
+                                        <span class="badge bg-warning text-dark">Despesa</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">{{ mov.type }}</span>
+                                        {% endif %}
                                     </td>
                                     <td>
                                         <span class="badge {{ 'bg-warning' if mov.payment_status == 'pendente' else 'bg-success' }}">
@@ -225,7 +302,7 @@
                                             {% endif %}
                                         {% endfor %}
                                     </td>
-                                    <td class="{{ 'text-success' if mov.type == 'entrada' else 'text-danger' }} fw-bold">
+                                    <td class="fw-bold {{ 'text-success' if mov.type == 'entrada' else 'text-danger' }}">
                                         R$ {{ "%.2f"|format(mov.amount) }}
                                     </td>
                                     <td>{{ mov.description }}</td>
@@ -246,6 +323,42 @@
                         </table>
                     </div>
                 </div>
+                
+                <!-- Aba de Registro em Lote -->
+                <div class="tab-pane fade" id="batch" role="tabpanel" aria-labelledby="batch-tab">
+                    <div class="card shadow-sm">
+                        <div class="card-body">
+                            <form id="batchMovementsForm" action="{{ url_for('batch_movements', unit_id=unit.id, cashier_id=cashier.id) }}" method="post">
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <h5 class="mb-0">Adicionar Múltiplas Entradas</h5>
+                                        <button type="button" id="addBatchEntry" class="btn btn-outline-warning">
+                                            <i class="bi bi-plus-circle"></i> Nova Linha
+                                        </button>
+                                    </div>
+                                    
+                                    <div class="row fw-bold mb-2 border-bottom pb-2">
+                                        <div class="col-md-3">Forma de Pagamento</div>
+                                        <div class="col-md-3">Detalhamento</div>
+                                        <div class="col-md-2">Valor</div>
+                                        <div class="col-md-3">Descrição</div>
+                                        <div class="col-md-1">Remover</div>
+                                    </div>
+                                    
+                                    <div id="batchEntriesContainer">
+                                        <!-- Entradas dinâmicas serão adicionadas aqui -->
+                                    </div>
+                                </div>
+                                
+                                <div class="d-grid">
+                                    <button type="button" id="saveBatchEntries" class="btn btn-warning py-2">
+                                        <i class="bi bi-save me-2"></i> Salvar Todas as Entradas
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -260,25 +373,317 @@
             window.location.href = "{{ url_for('user_movements', unit_id=unit.id, cashier_id=cashier.id) }}?date=" + this.value;
         });
         
-        // Toggle campos de tipo de pagamento
-        const paymentMethodSelect = document.getElementById('payment_method');
+        // Toggle campos baseados no tipo de pagamento
+        const paymentMethodMain = document.getElementById('payment_method_main');
+        const paymentMethodDetail = document.getElementById('payment_method');
         const dinheiroFields = document.getElementById('dinheiroFields');
         const ticketFields = document.getElementById('ticketFields');
         const statusContainer = document.getElementById('statusContainer');
+        const expenseCategoryContainer = document.getElementById('expenseCategoryContainer');
         const typeRadios = document.getElementsByName('type');
         
-        paymentMethodSelect.addEventListener('change', function() {
-            const selectedOption = this.options[this.selectedIndex];
-            const category = selectedOption.getAttribute('data-category');
-            
-            dinheiroFields.style.display = (category === 'dinheiro') ? 'flex' : 'none';
-            ticketFields.style.display = (category === 'ticket') ? 'block' : 'none';
+        // Função para carregar formas de pagamento detalhadas
+        function loadPaymentMethods(parentId) {
+            fetch(`/api/payment_methods/${parentId}`)
+                .then(response => response.json())
+                .then(data => {
+                    paymentMethodDetail.innerHTML = '';
+                    
+                    if (data.length === 0) {
+                        // Se não houver subcategorias, usa o próprio método principal
+                        const option = document.createElement('option');
+                        option.value = parentId;
+                        option.textContent = paymentMethodMain.options[paymentMethodMain.selectedIndex].textContent;
+                        option.setAttribute('data-category', paymentMethodMain.options[paymentMethodMain.selectedIndex].getAttribute('data-category'));
+                        paymentMethodDetail.appendChild(option);
+                    } else {
+                        // Adiciona opção padrão
+                        const defaultOption = document.createElement('option');
+                        defaultOption.value = '';
+                        defaultOption.textContent = 'Selecione';
+                        paymentMethodDetail.appendChild(defaultOption);
+                        
+                        // Adiciona subcategorias
+                        data.forEach(method => {
+                            const option = document.createElement('option');
+                            option.value = method.id;
+                            option.textContent = method.name;
+                            option.setAttribute('data-category', method.category);
+                            paymentMethodDetail.appendChild(option);
+                        });
+                    }
+                    
+                    // Dispara o evento change para atualizar os campos
+                    const event = new Event('change');
+                    paymentMethodDetail.dispatchEvent(event);
+                })
+                .catch(error => console.error('Erro ao carregar formas de pagamento:', error));
+        }
+        
+        paymentMethodMain.addEventListener('change', function() {
+            if (this.value) {
+                loadPaymentMethods(this.value);
+            } else {
+                paymentMethodDetail.innerHTML = '<option value="">Selecione o tipo de pagamento primeiro</option>';
+                dinheiroFields.style.display = 'none';
+                ticketFields.style.display = 'none';
+            }
         });
         
-        // Toggle status container baseado no tipo
+        paymentMethodDetail.addEventListener('change', function() {
+            if (this.value) {
+                const selectedOption = this.options[this.selectedIndex];
+                const category = selectedOption.getAttribute('data-category');
+                
+                dinheiroFields.style.display = (category === 'dinheiro') ? 'flex' : 'none';
+                ticketFields.style.display = (category === 'ticket') ? 'block' : 'none';
+            } else {
+                dinheiroFields.style.display = 'none';
+                ticketFields.style.display = 'none';
+            }
+        });
+        
+        // Toggle containers baseados no tipo de movimentação
         for (const radio of typeRadios) {
             radio.addEventListener('change', function() {
-                statusContainer.style.display = (this.value === 'entrada') ? 'block' : 'none';
+                if (this.value === 'entrada') {
+                    statusContainer.style.display = 'block';
+                    expenseCategoryContainer.style.display = 'none';
+                } else if (this.value === 'estorno') {
+                    statusContainer.style.display = 'none';
+                    expenseCategoryContainer.style.display = 'none';
+                } else if (this.value === 'despesa_loja') {
+                    statusContainer.style.display = 'none';
+                    expenseCategoryContainer.style.display = 'block';
+                }
+            });
+        }
+        
+        // Script para registro de movimentações em lote
+        const batchForm = document.getElementById('batchMovementsForm');
+        const batchContainer = document.getElementById('batchEntriesContainer');
+        const addEntryBtn = document.getElementById('addBatchEntry');
+        const saveAllBtn = document.getElementById('saveBatchEntries');
+        
+        let entryCount = 0;
+        let lastPaymentMethod = null;
+        
+        // Função para adicionar uma nova linha de entrada
+        function addBatchEntry() {
+            entryCount++;
+            
+            const entryRow = document.createElement('div');
+            entryRow.className = 'batch-entry row mb-2 border-bottom pb-2';
+            entryRow.setAttribute('data-entry-id', entryCount);
+            
+            let paymentMethodOptions = '<option value="">Selecione</option>';
+            
+            // Usar o último método de pagamento como default se existir
+            if (lastPaymentMethod) {
+                const paymentMethods = document.querySelectorAll('#payment_method_main option');
+                paymentMethods.forEach(option => {
+                    if (option.value) {
+                        if (option.value === lastPaymentMethod) {
+                            paymentMethodOptions += `<option value="${option.value}" data-category="${option.getAttribute('data-category')}" selected>${option.textContent}</option>`;
+                        } else {
+                            paymentMethodOptions += `<option value="${option.value}" data-category="${option.getAttribute('data-category')}">${option.textContent}</option>`;
+                        }
+                    }
+                });
+            } else {
+                const paymentMethods = document.querySelectorAll('#payment_method_main option');
+                paymentMethods.forEach(option => {
+                    if (option.value) {
+                        paymentMethodOptions += `<option value="${option.value}" data-category="${option.getAttribute('data-category')}">${option.textContent}</option>`;
+                    }
+                });
+            }
+            
+            entryRow.innerHTML = `
+                <div class="col-md-3">
+                    <select class="form-select batch-payment-method" name="batch_payment_method_${entryCount}" required>
+                        ${paymentMethodOptions}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select class="form-select batch-payment-detail" name="batch_payment_detail_${entryCount}" required>
+                        <option value="">Selecione o tipo primeiro</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <div class="input-group">
+                        <span class="input-group-text">R$</span>
+                        <input type="number" class="form-control batch-amount" name="batch_amount_${entryCount}" step="0.01" min="0.01" required>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <input type="text" class="form-control batch-description" name="batch_description_${entryCount}" placeholder="Descrição (opcional)">
+                </div>
+                <div class="col-md-1">
+                    <button type="button" class="btn btn-danger btn-sm remove-entry">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            `;
+            
+            batchContainer.appendChild(entryRow);
+            
+            // Adicionar event listeners
+            const paymentMethodSelect = entryRow.querySelector('.batch-payment-method');
+            const paymentDetailSelect = entryRow.querySelector('.batch-payment-detail');
+            const removeBtn = entryRow.querySelector('.remove-entry');
+            const amountInput = entryRow.querySelector('.batch-amount');
+            
+            // Carregar opções detalhadas com base no método de pagamento
+            paymentMethodSelect.addEventListener('change', function() {
+                if (this.value) {
+                    lastPaymentMethod = this.value;
+                    loadPaymentDetails(this.value, paymentDetailSelect);
+                } else {
+                    paymentDetailSelect.innerHTML = '<option value="">Selecione o tipo primeiro</option>';
+                }
+            });
+            
+            // Disparar o evento de change se tiver valor inicial
+            if (paymentMethodSelect.value) {
+                paymentMethodSelect.dispatchEvent(new Event('change'));
+            }
+            
+            // Remover entrada
+            removeBtn.addEventListener('click', function() {
+                entryRow.remove();
+            });
+            
+            // Permitir adicionar nova linha ao pressionar Enter no campo de valor
+            amountInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    
+                    // Verificar se o campo de valor está preenchido
+                    if (this.value && parseFloat(this.value) > 0) {
+                        addBatchEntry();
+                    } else {
+                        // Mostrar mensagem de erro
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Atenção',
+                            text: 'Preencha o valor antes de adicionar uma nova linha',
+                            confirmButtonColor: '#fec32e'
+                        });
+                    }
+                }
+            });
+        }
+        
+        // Função para carregar opções detalhadas de pagamento
+        function loadPaymentDetails(parentId, selectElement) {
+            fetch(`/api/payment_methods/${parentId}`)
+                .then(response => response.json())
+                .then(data => {
+                    selectElement.innerHTML = '';
+                    
+                    if (data.length === 0) {
+                        // Se não houver subcategorias, usa o próprio método principal
+                        const option = document.createElement('option');
+                        option.value = parentId;
+                        
+                        // Encontrar o texto do método principal
+                        const mainSelect = document.querySelector(`[data-entry-id="${selectElement.closest('.batch-entry').getAttribute('data-entry-id')}"] .batch-payment-method`);
+                        option.textContent = mainSelect.options[mainSelect.selectedIndex].textContent;
+                        
+                        selectElement.appendChild(option);
+                    } else {
+                        // Adiciona opção padrão
+                        const defaultOption = document.createElement('option');
+                        defaultOption.value = '';
+                        defaultOption.textContent = 'Selecione';
+                        selectElement.appendChild(defaultOption);
+                        
+                        // Adiciona subcategorias
+                        data.forEach(method => {
+                            const option = document.createElement('option');
+                            option.value = method.id;
+                            option.textContent = method.name;
+                            selectElement.appendChild(option);
+                        });
+                    }
+                })
+                .catch(error => console.error('Erro ao carregar formas de pagamento:', error));
+        }
+        
+        // Adicionar primeira entrada ao carregar a página
+        if (addEntryBtn) {
+            addEntryBtn.addEventListener('click', addBatchEntry);
+            
+            // Adicionar entrada inicial
+            addBatchEntry();
+            
+            // Salvar todas as entradas
+            saveAllBtn.addEventListener('click', function() {
+                // Verificar se todos os campos obrigatórios estão preenchidos
+                const requiredFields = batchContainer.querySelectorAll('select[required], input[required]');
+                let isValid = true;
+                
+                requiredFields.forEach(field => {
+                    if (!field.value) {
+                        isValid = false;
+                        field.classList.add('is-invalid');
+                    } else {
+                        field.classList.remove('is-invalid');
+                    }
+                });
+                
+                if (!isValid) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Erro',
+                        text: 'Preencha todos os campos obrigatórios',
+                        confirmButtonColor: '#fec32e'
+                    });
+                    return;
+                }
+                
+                // Serializar o formulário
+                const formData = new FormData(batchForm);
+                
+                // Adicionar informação sobre quantas entradas existem
+                formData.append('entry_count', entryCount);
+                
+                // Enviar via fetch API
+                fetch(batchForm.action, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Sucesso',
+                            text: data.message,
+                            confirmButtonColor: '#fec32e'
+                        }).then(() => {
+                            // Recarregar a página para mostrar as novas entradas
+                            window.location.reload();
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Erro',
+                            text: data.message,
+                            confirmButtonColor: '#fec32e'
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao salvar movimentações:', error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Erro',
+                        text: 'Ocorreu um erro ao salvar as movimentações',
+                        confirmButtonColor: '#fec32e'
+                    });
+                });
             });
         }
     });

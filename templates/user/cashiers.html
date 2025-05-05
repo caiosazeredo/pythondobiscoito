@@ -15,6 +15,22 @@
         <div class="col-md-6 d-flex gap-3">
             <input type="text" id="searchInput" class="form-control" placeholder="Buscar caixa...">
             
+            <div class="dropdown">
+                <button class="btn btn-outline-warning dropdown-toggle" type="button" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-gear-fill"></i>
+                </button>
+                <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+                    <li><a class="dropdown-item" href="{{ url_for('user_coins_control', unit_id=unit.id) }}">
+                        <i class="bi bi-coin me-2"></i> Controle de Moedas
+                    </a></li>
+                    {% if current_user.is_superuser %}
+                    <li><a class="dropdown-item" href="{{ url_for('admin_monthly_base', unit_id=unit.id) }}">
+                        <i class="bi bi-calendar-month me-2"></i> Configurar Valor Base Mensal
+                    </a></li>
+                    {% endif %}
+                </ul>
+            </div>
+            
             {% if current_user.is_superuser %}
             <button class="btn btn-warning" id="btnCreateCashier">
                 NOVO CAIXA
@@ -23,7 +39,81 @@
         </div>
     </div>
     
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="d-flex flex-column align-items-center">
+                                <div class="text-warning mb-2">
+                                    <i class="bi bi-currency-dollar fs-1"></i>
+                                </div>
+                                <h5 class="mb-1">Valor Base Mensal</h5>
+                                <h3 class="text-success">R$ {{ "%.2f"|format(base_amount) }}</h3>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex flex-column align-items-center">
+                                <div class="text-warning mb-2">
+                                    <i class="bi bi-coin fs-1"></i>
+                                </div>
+                                <h5 class="mb-1">Moedas Disponíveis</h5>
+                                <h3 class="text-success">R$ {{ "%.2f"|format(coins_amount) }}</h3>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex flex-column align-items-center">
+                                <div class="text-warning mb-2">
+                                    <i class="bi bi-wallet2 fs-1"></i>
+                                </div>
+                                <h5 class="mb-1">Saldo do Dia</h5>
+                                <h3 class="{{ 'text-success' if saldo_dia >= 0 else 'text-danger' }}">
+                                    R$ {{ "%.2f"|format(saldo_dia) }}
+                                </h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 justify-content-center">
+        <!-- Caixa Financeiro -->
+        <div class="col">
+            <div class="card h-100 shadow-sm border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0 fw-bold"><i class="bi bi-bank me-2"></i> Caixa Financeiro</h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="d-flex flex-column mb-3">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Status:</span>
+                            <span class="badge rounded-pill bg-success">Aberto</span>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Valor Base:</span>
+                            <span class="fw-bold">R$ {{ "%.2f"|format(base_amount) }}</span>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">Saldo Atual:</span>
+                            <span class="fw-bold {{ 'text-success' if financial_balance >= 0 else 'text-danger' }}">
+                                R$ {{ "%.2f"|format(financial_balance + base_amount) }}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <a href="{{ url_for('user_movements', unit_id=unit.id, cashier_id=cashiers[0].id if cashiers else 0) }}" class="btn btn-warning w-100">
+                        <i class="bi bi-arrow-right-circle me-2"></i> Gerenciar
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Caixas regulares -->
         {% for cashier in cashiers %}
         <div class="col cashier-card" data-number="{{ cashier.number }}" data-status="{{ cashier.status }}">
             <div class="card h-100 shadow-sm">
@@ -35,22 +125,32 @@
                         <h3 class="card-title h5 mb-0">Caixa {{ cashier.number }}</h3>
                     </div>
                     
-                    <div class="d-flex align-items-center mt-3">
-                        <div class="me-2">
+                    <div class="d-flex flex-column mb-3">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Status:</span>
                             <span class="badge rounded-pill {{ 'bg-success' if cashier.status == 'aberto' else 'bg-danger' }}">
                                 {{ "Aberto" if cashier.status == 'aberto' else "Fechado" }}
                             </span>
                         </div>
-                        <p class="card-text mb-0">Status</p>
+                        
+                        {% if cashier.id in cashier_totals %}
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Entradas:</span>
+                            <span class="text-success">R$ {{ "%.2f"|format(cashier_totals[cashier.id].entrada) }}</span>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">Saldo:</span>
+                            <span class="{{ 'text-success' if cashier_totals[cashier.id].saldo >= 0 else 'text-danger' }}">
+                                R$ {{ "%.2f"|format(cashier_totals[cashier.id].saldo) }}
+                            </span>
+                        </div>
+                        {% endif %}
                     </div>
                     
                     <a href="{{ url_for('user_movements', unit_id=unit.id, cashier_id=cashier.id) }}" class="stretched-link"></a>
                 </div>
             </div>
-        </div>
-        {% else %}
-        <div class="col-12 text-center">
-            <p>Nenhum caixa encontrado para esta unidade.</p>
         </div>
         {% endfor %}
     </div>
