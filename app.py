@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import pymysql
 from pymysql.cursors import DictCursor
@@ -90,16 +90,18 @@ mail = Mail(app)
 def send_password_email(email, password, name, is_reset=False):
     if is_reset:
         subject = 'Casa do Biscoito - Redefinição de Senha'
-        template = 'reset_password_email.html'
+        template = 'auth/reset_password_email.html'  # Ajustando o caminho
     else:
         subject = 'Casa do Biscoito - Boas-vindas e Senha Temporária'
-        template = 'new_user_email.html'
+        template = 'auth/new_user_email.html'  # Ajustando o caminho
     
     msg = Message(
         subject,
         recipients=[email]
     )
     
+    # Remover referência à imagem do template ou anexá-la corretamente
+    # Opção 1: Simplesmente render o template sem a imagem
     msg.html = render_template(template, 
                               name=name, 
                               password=password,
@@ -109,7 +111,10 @@ def send_password_email(email, password, name, is_reset=False):
         mail.send(msg)
         return True
     except Exception as e:
-        print(f"Erro ao enviar e-mail: {str(e)}")
+        # Melhorando o log de erro para debugging
+        print(f"Erro detalhado ao enviar e-mail: {str(e)}")
+        # Se o envio de e-mail falhar, ainda podemos considerar o usuário criado
+        # mas retornamos False para que a aplicação saiba que o e-mail não foi enviado
         return False
 # Criar tabelas do banco de dados (se não existirem)
 def initialize_database():
@@ -192,6 +197,19 @@ def initialize_database():
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (cashier_id) REFERENCES cashier(id) ON DELETE CASCADE,
         FOREIGN KEY (payment_method) REFERENCES payment_method(id)
+    )
+    """)
+    
+    # Tabela de redefinição de senha
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS password_reset (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        token VARCHAR(255) NOT NULL,
+        expires DATETIME NOT NULL,
+        used BOOLEAN DEFAULT FALSE,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
     )
     """)
     
@@ -339,8 +357,9 @@ def admin_create_user():
         
         try:
             cursor = conn.cursor()
+            # Corrigindo o nome da tabela para "user" e removendo o campo created_at
             cursor.execute(
-                "INSERT INTO users (name, email, password_hash, cpf, phone, role, is_superuser, is_active, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                "INSERT INTO user (name, email, password_hash, cpf, phone, role, is_superuser, is_active, last_login) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (name, email, password_hash, cpf, phone, role, is_superuser, 1, datetime.now())
             )
             user_id = cursor.lastrowid
@@ -383,14 +402,15 @@ def reset_password_request():
         
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
+        # Corrigido para usar "user" em vez de "users"
+        cursor.execute("SELECT * FROM user WHERE email = %s", (email,))
         user = cursor.fetchone()
         
         if user:
             # Gerar um token único para redefinição
             import secrets
             token = secrets.token_hex(16)
-            expires = datetime.now() + datetime.timedelta(hours=24)
+            expires = datetime.now() + timedelta(hours=24)
             
             # Salvar o token no banco
             cursor.execute(
@@ -453,9 +473,9 @@ def reset_password(token):
             flash('As senhas não coincidem.', 'error')
             return render_template('auth/reset_password.html', token=token)
         
-        # Atualizar senha do usuário
+        # Atualizar senha do usuário - Corrigido para usar "user" em vez de "users"
         cursor.execute(
-            "UPDATE users SET password_hash = %s WHERE id = %s",
+            "UPDATE user SET password_hash = %s WHERE id = %s",
             (generate_password_hash(password), reset_data['user_id'])
         )
         
