@@ -122,7 +122,6 @@ def send_password_email(email, password, name, is_reset=False):
         # mas retornamos False para que a aplicação saiba que o e-mail não foi enviado
         return False
 
-# Criar tabelas do banco de dados (se não existirem)
 def initialize_database():
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -221,6 +220,21 @@ def initialize_database():
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (unit_id) REFERENCES unit(id) ON DELETE CASCADE,
         UNIQUE KEY unique_monthly_base (unit_id, month, year)
+    )
+    """)
+    
+    # Nova tabela para valores base por caixa
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS cashier_base_values (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        cashier_id INT NOT NULL,
+        month INT NOT NULL,
+        year INT NOT NULL,
+        amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (cashier_id) REFERENCES cashier(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_cashier_base (cashier_id, month, year)
     )
     """)
     
@@ -1362,7 +1376,13 @@ def user_movements(unit_id, cashier_id):
     monthly_base = cursor.fetchone()
     base_amount = monthly_base['amount'] if monthly_base else 0
     
-    # Obter ou criar campos específicos do documento do cliente
+    # Obter valor base específico para este caixa
+    cursor.execute(
+        "SELECT amount FROM cashier_base_values WHERE cashier_id = %s AND month = %s AND year = %s",
+        (cashier_id, date_obj.month, date_obj.year)
+    )
+    cashier_base_result = cursor.fetchone()
+    cashier_base_amount = cashier_base_result['amount'] if cashier_base_result else 0
     
     # Campo "devo" (devoluções/cancelamentos)
     cursor.execute(
@@ -1605,6 +1625,7 @@ def user_movements(unit_id, cashier_id):
         total_despesa=total_despesa,
         financial_balance=financial_balance,
         base_amount=base_amount,
+        cashier_base_amount=cashier_base_amount,  # Adicionando esta variável
         devo_total=devo_total,
         t_total=t_total,
         z_total=z_total,
@@ -1880,9 +1901,13 @@ def user_distribute_base(unit_id):
                 (status, cashier['id'])
             )
             
-            # Armazenar o valor base para este caixa
-            # Aqui você pode implementar a lógica para salvar esses valores em uma tabela específica
-            # Por enquanto, apenas vamos acumular o total
+            # Salvar o valor base para este caixa na nova tabela
+            cursor.execute(
+                "INSERT INTO cashier_base_values (cashier_id, month, year, amount) VALUES (%s, %s, %s, %s) "
+                "ON DUPLICATE KEY UPDATE amount = %s",
+                (cashier['id'], current_month, current_year, amount, amount)
+            )
+            
             cashier_values[cashier['id']] = amount
             total_distributed += amount
         
@@ -1890,17 +1915,27 @@ def user_distribute_base(unit_id):
         flash('Distribuição de valores realizada com sucesso!', 'success')
         return redirect(url_for('user_cashiers', unit_id=unit_id))
     else:
-        # No caso de GET, podemos pegar valores previamente distribuídos
-        # ou distribuir o valor total igualmente entre os caixas ativos
-        active_cashiers = [c for c in cashiers if c['status'] == 'aberto']
-        
-        if active_cashiers:
-            equal_amount = monthly_base['amount'] / len(active_cashiers)
+        # No caso de GET, verificar se existem valores previamente distribuídos
+        for cashier in cashiers:
+            cursor.execute(
+                "SELECT amount FROM cashier_base_values WHERE cashier_id = %s AND month = %s AND year = %s",
+                (cashier['id'], current_month, current_year)
+            )
+            base_value = cursor.fetchone()
             
-            for cashier in cashiers:
+            if base_value:
+                # Usar o valor previamente distribuído
+                cashier_values[cashier['id']] = base_value['amount']
+                total_distributed += base_value['amount']
+            else:
+                # Se não tiver valor previamente distribuído
                 if cashier['status'] == 'aberto':
-                    cashier_values[cashier['id']] = equal_amount
-                    total_distributed += equal_amount
+                    # Distribuir igualmente entre os caixas ativos
+                    active_cashiers = [c for c in cashiers if c['status'] == 'aberto']
+                    if active_cashiers:
+                        equal_amount = monthly_base['amount'] / len(active_cashiers)
+                        cashier_values[cashier['id']] = equal_amount
+                        total_distributed += equal_amount
                 else:
                     cashier_values[cashier['id']] = 0
     
@@ -1917,7 +1952,7 @@ def user_distribute_base(unit_id):
         month_name=calendar.month_name[current_month],
         cashier_values=cashier_values,
         total_distributed=total_distributed
-    )    
+    )  
 
 # Rota para obter métodos de pagamento via AJAX
 @app.route('/api/payment_methods/<int:parent_id>', methods=['GET'])
