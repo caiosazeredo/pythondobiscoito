@@ -215,7 +215,9 @@
                         
                         <div class="col-md-8">
                             <h6 class="mb-3">Distribuição por Caixa</h6>
-                            <canvas id="cashiersChart" width="100%" height="200"></canvas>
+                            <div class="chart-container" style="height: 220px;">
+                                <canvas id="cashiersChart"></canvas>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -257,14 +259,33 @@
                     data: cashierValues,
                     backgroundColor: 'rgba(254, 195, 46, 0.7)',
                     borderColor: 'rgba(254, 195, 46, 1)',
-                    borderWidth: 1
+                    borderWidth: 1,
+                    borderRadius: 3
                 }]
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 scales: {
                     y: {
-                        beginAtZero: true
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return 'R$ ' + value.toFixed(2);
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return 'R$ ' + parseFloat(context.raw).toFixed(2);
+                            }
+                        }
                     }
                 }
             }

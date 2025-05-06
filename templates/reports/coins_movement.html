@@ -91,7 +91,9 @@
                     <h5 class="mb-0">Tendência Diária</h5>
                 </div>
                 <div class="card-body">
-                    <canvas id="dailyTrendChart" width="100%" height="300"></canvas>
+                    <div class="chart-container">
+                        <canvas id="dailyTrendChart"></canvas>
+                    </div>
                 </div>
             </div>
             
@@ -210,16 +212,39 @@
                     data: values,
                     borderColor: '#FEC32E',
                     backgroundColor: 'rgba(254, 195, 46, 0.1)',
-                    borderWidth: 3,
+                    borderWidth: 2,
                     fill: true,
-                    tension: 0.4
+                    tension: 0.4,
+                    pointRadius: 3,
+                    pointHoverRadius: 5
                 }]
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 scales: {
                     y: {
-                        beginAtZero: true
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return 'R$ ' + value.toFixed(2);
+                            }
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 45
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return 'R$ ' + parseFloat(context.raw).toFixed(2);
+                            }
+                        }
                     }
                 }
             }

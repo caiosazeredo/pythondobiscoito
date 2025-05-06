@@ -168,13 +168,19 @@
                     </ul>
                     <div class="tab-content pt-3" id="myTabContent">
                         <div class="tab-pane fade show active" id="revenue" role="tabpanel" aria-labelledby="revenue-tab">
-                            <canvas id="revenueChart" width="100%" height="300"></canvas>
+                            <div class="chart-container">
+                                <canvas id="revenueChart"></canvas>
+                            </div>
                         </div>
                         <div class="tab-pane fade" id="profit" role="tabpanel" aria-labelledby="profit-tab">
-                            <canvas id="profitChart" width="100%" height="300"></canvas>
+                            <div class="chart-container">
+                                <canvas id="profitChart"></canvas>
+                            </div>
                         </div>
                         <div class="tab-pane fade" id="margin" role="tabpanel" aria-labelledby="margin-tab">
-                            <canvas id="marginChart" width="100%" height="300"></canvas>
+                            <div class="chart-container">
+                                <canvas id="marginChart"></canvas>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -371,6 +377,7 @@
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 indexAxis: 'y',
                 scales: {
                     x: {
@@ -380,7 +387,7 @@
                         },
                         ticks: {
                             callback: function(value) {
-                                return 'R$ ' + value.toFixed(2);
+                                return 'R$ ' + value.toFixed(0);
                             }
                         }
                     },
@@ -394,7 +401,7 @@
                     tooltip: {
                         callbacks: {
                             label: function(context) {
-                                return context.dataset.label + ': R$ ' + context.parsed.x.toFixed(2);
+                                return context.dataset.label + ': R$ ' + parseFloat(context.raw).toFixed(2);
                             }
                         }
                     },
@@ -423,6 +430,7 @@
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 indexAxis: 'y',
                 scales: {
                     x: {
@@ -432,7 +440,7 @@
                         },
                         ticks: {
                             callback: function(value) {
-                                return 'R$ ' + value.toFixed(2);
+                                return 'R$ ' + value.toFixed(0);
                             }
                         }
                     },
@@ -446,7 +454,7 @@
                     tooltip: {
                         callbacks: {
                             label: function(context) {
-                                return context.dataset.label + ': R$ ' + context.parsed.x.toFixed(2);
+                                return context.dataset.label + ': R$ ' + parseFloat(context.raw).toFixed(2);
                             }
                         }
                     },
@@ -475,6 +483,7 @@
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 indexAxis: 'y',
                 scales: {
                     x: {

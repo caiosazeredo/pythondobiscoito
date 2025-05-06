@@ -50,7 +50,9 @@
                     <h5 class="mb-0">Fluxo de Caixa - Período Atual</h5>
                 </div>
                 <div class="card-body">
-                    <canvas id="flowChart" width="100%" height="350"></canvas>
+                    <div class="chart-container" style="height: 280px;">
+                        <canvas id="flowChart"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
@@ -109,7 +111,9 @@
                     <h5 class="mb-0">Projeção - Próximo Período</h5>
                 </div>
                 <div class="card-body">
-                    <canvas id="projectionChart" width="100%" height="200"></canvas>
+                    <div class="chart-container">
+                        <canvas id="projectionChart"></canvas>
+                    </div>
                     
                     <div class="alert alert-warning mt-3">
                         <div class="d-flex align-items-center">
@@ -211,8 +215,8 @@
                         borderWidth: 2,
                         fill: false,
                         tension: 0.4,
-                        pointRadius: 4,
-                        pointHoverRadius: 6
+                        pointRadius: 3,
+                        pointHoverRadius: 5
                     },
                     {
                         label: 'Saídas',
@@ -222,24 +226,25 @@
                         borderWidth: 2,
                         fill: false,
                         tension: 0.4,
-                        pointRadius: 4,
-                        pointHoverRadius: 6
+                        pointRadius: 3,
+                        pointHoverRadius: 5
                     },
                     {
                         label: 'Saldo',
                         data: nets,
                         borderColor: '#FEC32E',
                         backgroundColor: 'rgba(254, 195, 46, 0.1)',
-                        borderWidth: 3,
+                        borderWidth: 2,
                         fill: true,
                         tension: 0.4,
-                        pointRadius: 4,
-                        pointHoverRadius: 6
+                        pointRadius: 3,
+                        pointHoverRadius: 5
                     }
                 ]
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 interaction: {
                     mode: 'index',
                     intersect: false,
@@ -259,6 +264,10 @@
                     x: {
                         grid: {
                             color: 'rgba(0, 0, 0, 0.05)'
+                        },
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 45
                         }
                     }
                 },
@@ -274,7 +283,8 @@
                         position: 'top',
                         labels: {
                             usePointStyle: true,
-                            padding: 20
+                            boxWidth: 8,
+                            padding: 10
                         }
                     }
                 }
@@ -302,13 +312,14 @@
                         borderWidth: 2,
                         fill: true,
                         tension: 0.4,
-                        pointRadius: 4,
-                        pointHoverRadius: 6
+                        pointRadius: 3,
+                        pointHoverRadius: 5
                     }
                 ]
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 scales: {
                     y: {
                         beginAtZero: true,
@@ -324,6 +335,10 @@
                     x: {
                         grid: {
                             color: 'rgba(0, 0, 0, 0.05)'
+                        },
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 45
                         }
                     }
                 },
@@ -338,7 +353,8 @@
                     legend: {
                         position: 'top',
                         labels: {
-                            usePointStyle: true
+                            usePointStyle: true,
+                            boxWidth: 8
                         }
                     }
                 }

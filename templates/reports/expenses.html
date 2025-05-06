@@ -83,7 +83,9 @@
                     </div>
                     
                     <h6 class="mb-3">Distribuição por Tipo</h6>
-                    <canvas id="expenseTypeChart" width="100%" height="200"></canvas>
+                    <div class="chart-container" style="height: 220px;">
+                        <canvas id="expenseTypeChart"></canvas>
+                    </div>
                     
                     <div class="table-responsive mt-3">
                         <table class="table table-sm">
@@ -242,9 +244,24 @@
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 plugins: {
                     legend: {
                         position: 'right',
+                        labels: {
+                            boxWidth: 12,
+                            padding: 10
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = parseFloat(context.raw).toFixed(2);
+                                const total = context.chart.getDatasetMeta(0).total;
+                                const percentage = Math.round((context.raw / total) * 100);
+                                return context.label + ': R$ ' + value + ' (' + percentage + '%)';
+                            }
+                        }
                     }
                 }
             }
