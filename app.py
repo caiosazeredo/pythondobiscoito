@@ -13,6 +13,7 @@ from decimal import Decimal
 
 # Inicialização do app
 app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY')
 app.config.from_object(Config)
 app.register_blueprint(reports)
 # Configuração do Flask-Login
