@@ -11,6 +11,22 @@ import json
 # Criação do Blueprint para relatórios
 reports = Blueprint('reports', __name__)
 
+# Nomes dos meses em português
+MESES = {
+    1: 'Janeiro',
+    2: 'Fevereiro',
+    3: 'Março',
+    4: 'Abril',
+    5: 'Maio',
+    6: 'Junho',
+    7: 'Julho',
+    8: 'Agosto',
+    9: 'Setembro',
+    10: 'Outubro',
+    11: 'Novembro',
+    12: 'Dezembro'
+}
+
 # Função para obter conexão com o banco
 def get_db_connection():
     return pymysql.connect(
@@ -297,7 +313,7 @@ def monthly_revenue_report():
         month_revenue = float(result['total_revenue'] if result and result['total_revenue'] else 0)
         
         graph_data.append({
-            'month': calendar.month_name[month_to_check],
+            'month': MESES[month_to_check],
             'year': year_to_check,
             'revenue': month_revenue
         })
@@ -315,9 +331,9 @@ def monthly_revenue_report():
         total_month_revenue=total_month_revenue,
         year=year,
         month=month,
-        month_name=calendar.month_name[month],
+        month_name=MESES[month],
         graph_data=json.dumps(graph_data),
-        calendar=calendar
+        meses=MESES
     )
 
 # 3. Relatório de Formas de Pagamento (Acessível por todos)
@@ -886,15 +902,15 @@ def coins_movement_report(unit_id):
     graph_data = [{'date': day['date'].strftime('%Y-%m-%d'), 'value': float(day['net'])} for day in daily_trends_list]
     
     # Verificar alertas - volumes acima da média
-    average_daily_net = sum(day['net'] for day in daily_trends_list) / len(daily_trends_list) if daily_trends_list else 0
+    average_daily_net = sum(float(day['net']) for day in daily_trends_list) / len(daily_trends_list) if daily_trends_list else 0
     alerts = []
     
     for day in daily_trends_list:
-        if day['net'] > average_daily_net * 1.5:  # 50% acima da média
+        if float(day['net']) > average_daily_net * 1.5:  # 50% acima da média
             alerts.append({
                 'date': day['date'],
                 'value': day['net'],
-                'percentage': (day['net'] / average_daily_net - 1) * 100 if average_daily_net > 0 else 0
+                'percentage': (float(day['net']) / average_daily_net - 1) * 100 if average_daily_net > 0 else 0
             })
     
     cursor.close()
@@ -1120,7 +1136,7 @@ def profitability_report():
     else:
         start_date = date(year, month, 1)
         end_date = date(year, month, calendar.monthrange(year, month)[1])
-        period_name = f"{calendar.month_name[month]} de {year}"
+        period_name = f"{MESES[month]} de {year}"
     
     # Converter datas para datetime
     start_datetime = datetime.combine(start_date, datetime.min.time())
@@ -1203,7 +1219,7 @@ def profitability_report():
         profitability_data=profitability_data,
         year=year,
         month=month,
-        month_name=calendar.month_name[month] if month != 'all' else 'Todos',
+        month_name=MESES[month] if month != 'all' else 'Todos os Meses',
         period_name=period_name,
         total_revenue=total_revenue,
         total_expenses=total_expenses,
@@ -1213,5 +1229,5 @@ def profitability_report():
         revenue_data=json.dumps(revenue_data),
         profit_data=json.dumps(profit_data),
         margin_data=json.dumps(margin_data),
-        calendar=calendar
+        meses=MESES
     )

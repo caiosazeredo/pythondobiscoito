@@ -30,7 +30,7 @@
                             <select name="month" id="month" class="form-select">
                                 <option value="all" {% if month == 'all' %}selected{% endif %}>Todos os Meses</option>
                                 {% for i in range(1, 13) %}
-                                <option value="{{ i }}" {% if month == i %}selected{% endif %}>{{ calendar.month_name[i] }}</option>
+                                <option value="{{ i }}" {% if month == i %}selected{% endif %}>{{ meses[i] }}</option>
                                 {% endfor %}
                             </select>
                         </div>

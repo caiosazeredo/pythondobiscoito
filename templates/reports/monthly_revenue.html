@@ -17,7 +17,7 @@
             <form method="post" class="d-flex gap-2">
                 <select name="month" class="form-select">
                     {% for i in range(1, 13) %}
-                    <option value="{{ i }}" {% if month == i %}selected{% endif %}>{{ calendar.month_name[i] }}</option>
+                    <option value="{{ i }}" {% if month == i %}selected{% endif %}>{{ meses[i] }}</option>
                     {% endfor %}
                 </select>
                 <select name="year" class="form-select">
