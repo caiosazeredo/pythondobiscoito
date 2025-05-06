@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+
+{% block title %}Relatório de Despesas - Casa do Biscoito{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="position-relative mb-4">
+        <a href="{{ url_for('reports.reports_home') }}" class="btn btn-link text-warning position-absolute start-0">
+            <i class="bi bi-arrow-left-circle-fill fs-3"></i>
+        </a>
+        <h1 class="text-center">Relatório de Despesas</h1>
+        <h5 class="text-center text-muted">{{ start_date.strftime('%d/%m/%Y') }} a {{ end_date.strftime('%d/%m/%Y') }}</h5>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <form method="post" class="card shadow-sm">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="unit_id" class="form-label">Unidade</label>
+                            <select name="unit_id" id="unit_id" class="form-select">
+                                <option value="all">Todas as Unidades</option>
+                                {% for unit in units %}
+                                <option value="{{ unit.id }}" {% if selected_unit_id == unit.id|string %}selected{% endif %}>{{ unit.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="category_type" class="form-label">Tipo de Categoria</label>
+                            <select name="category_type" id="category_type" class="form-select">
+                                <option value="all">Todas as Categorias</option>
+                                <option value="fixa" {% if selected_category_type == 'fixa' %}selected{% endif %}>Despesas Fixas</option>
+                                <option value="socio" {% if selected_category_type == 'socio' %}selected{% endif %}>Sócios</option>
+                                <option value="fornecedor" {% if selected_category_type == 'fornecedor' %}selected{% endif %}>Fornecedores</option>
+                                <option value="extra" {% if selected_category_type == 'extra' %}selected{% endif %}>Extras</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="start_date" class="form-label">Data Inicial</label>
+                            <input type="date" name="start_date" id="start_date" class="form-control" value="{{ start_date.strftime('%Y-%m-%d') }}">
+                        </div>
+                        <div class="col-md-2">
+                            <label for="end_date" class="form-label">Data Final</label>
+                            <input type="date" name="end_date" id="end_date" class="form-control" value="{{ end_date.strftime('%Y-%m-%d') }}">
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-warning w-100">Filtrar</button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0">Resumo de Despesas</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="d-flex flex-column align-items-center">
+                                <div class="text-danger mb-2">
+                                    <i class="bi bi-cash-stack fs-1"></i>
+                                </div>
+                                <h5 class="mb-1">Total de Despesas</h5>
+                                <h3 class="text-danger">R$ {{ "%.2f"|format(total_expenses) }}</h3>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex flex-column align-items-center">
+                                <div class="text-warning mb-2">
+                                    <i class="bi bi-graph-up-arrow fs-1"></i>
+                                </div>
+                                <h5 class="mb-1">Impacto sobre Faturamento</h5>
+                                <h3 class="text-warning">{{ "%.1f"|format(impact_percentage) }}%</h3>
+                                <small class="text-muted">(Faturamento: R$ {{ "%.2f"|format(total_revenue) }})</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <h6 class="mb-3">Distribuição por Tipo</h6>
+                    <canvas id="expenseTypeChart" width="100%" height="200"></canvas>
+                    
+                    <div class="table-responsive mt-3">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Tipo</th>
+                                    <th class="text-end">Valor</th>
+                                    <th class="text-end">%</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for type, total in totals_by_type.items() %}
+                                <tr>
+                                    <td>{{ type|capitalize }}</td>
+                                    <td class="text-end">R$ {{ "%.2f"|format(total) }}</td>
+                                    <td class="text-end">{{ "%.1f"|format(total / total_expenses * 100 if total_expenses > 0 else 0) }}%</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="3" class="text-center">Nenhuma despesa registrada.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot class="table-dark">
+                                <tr>
+                                    <th>Total</th>
+                                    <th class="text-end">R$ {{ "%.2f"|format(total_expenses) }}</th>
+                                    <th class="text-end">100%</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0">Despesas por Categoria</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-striped mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Categoria</th>
+                                    <th>Tipo</th>
+                                    <th class="text-end">Valor</th>
+                                    <th class="text-end">%</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for category_name, category in totals_by_category.items() %}
+                                <tr>
+                                    <td>{{ category.name }}</td>
+                                    <td><span class="badge bg-light text-dark">{{ category.type|capitalize }}</span></td>
+                                    <td class="text-end">R$ {{ "%.2f"|format(category.total) }}</td>
+                                    <td class="text-end">{{ "%.1f"|format(category.total / total_expenses * 100 if total_expenses > 0 else 0) }}%</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="4" class="text-center">Nenhuma despesa registrada.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot class="table-dark">
+                                <tr>
+                                    <th colspan="2">Total</th>
+                                    <th class="text-end">R$ {{ "%.2f"|format(total_expenses) }}</th>
+                                    <th class="text-end">100%</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0">Detalhamento de Despesas</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-striped mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Categoria</th>
+                                    <th>Unidade</th>
+                                    <th>Descrição</th>
+                                    <th class="text-end">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for expense in expenses %}
+                                <tr>
+                                    <td>{{ expense.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                                    <td>
+                                        <span class="badge bg-light text-dark">{{ expense.category_type|capitalize }}</span>
+                                        {{ expense.category_name }}
+                                    </td>
+                                    <td>{{ expense.unit_name }}</td>
+                                    <td>{{ expense.description }}</td>
+                                    <td class="text-end text-danger">R$ {{ "%.2f"|format(expense.amount) }}</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center">Nenhuma despesa registrada para o período.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Gráfico de tipos de despesas
+        const expenseTypeCtx = document.getElementById('expenseTypeChart').getContext('2d');
+        
+        // Preparar dados
+        const expenseTypes = [];
+        const expenseValues = [];
+        const colors = [
+            '#FF9800', '#F44336', '#9C27B0', '#00BCD4',
+            '#4CAF50', '#2196F3', '#FFC107', '#795548'
+        ];
+        
+        {% for type, total in totals_by_type.items() %}
+        expenseTypes.push('{{ type|capitalize }}');
+        expenseValues.push({{ total }});
+        {% endfor %}
+        
+        // Criar gráfico de pizza
+        new Chart(expenseTypeCtx, {
+            type: 'pie',
+            data: {
+                labels: expenseTypes,
+                datasets: [{
+                    data: expenseValues,
+                    backgroundColor: colors.slice(0, expenseTypes.length),
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

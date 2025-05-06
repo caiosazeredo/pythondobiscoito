@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+
+{% block title %}Relatórios - Casa do Biscoito{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="position-relative mb-4">
+        {% if current_user.is_superuser %}
+        <a href="{{ url_for('admin_home') }}" class="btn btn-link text-warning position-absolute start-0">
+            <i class="bi bi-arrow-left-circle-fill fs-3"></i>
+        </a>
+        {% else %}
+        <a href="{{ url_for('user_home') }}" class="btn btn-link text-warning position-absolute start-0">
+            <i class="bi bi-arrow-left-circle-fill fs-3"></i>
+        </a>
+        {% endif %}
+        
+        <h1 class="text-center">Relatórios</h1>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0">Selecione uma Unidade</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row row-cols-1 row-cols-md-3 g-4">
+                        {% for unit in units %}
+                        <div class="col">
+                            <div class="card h-100 shadow-sm">
+                                <div class="card-body p-4">
+                                    <div class="d-flex align-items-center mb-3">
+                                        <div class="me-3 text-warning">
+                                            <i class="bi bi-shop fs-2"></i>
+                                        </div>
+                                        <h3 class="card-title h5 mb-0">{{ unit.name }}</h3>
+                                    </div>
+                                    <p class="card-text text-muted">{{ unit.address }}</p>
+                                </div>
+                                <div class="card-footer bg-light p-0">
+                                    <button class="btn btn-link w-100 text-dark" type="button" data-bs-toggle="collapse" data-bs-target="#unitReports{{ unit.id }}" aria-expanded="false">
+                                        Ver relatórios <i class="bi bi-chevron-down"></i>
+                                    </button>
+                                </div>
+                                <div class="collapse" id="unitReports{{ unit.id }}">
+                                    <div class="card-body border-top">
+                                        <div class="d-grid gap-2">
+                                            <a href="{{ url_for('reports.daily_sales_report', unit_id=unit.id) }}" class="btn btn-outline-warning">
+                                                <i class="bi bi-graph-up me-2"></i> Relatório Diário de Vendas
+                                            </a>
+                                            <a href="{{ url_for('reports.payment_methods_report', unit_id=unit.id) }}" class="btn btn-outline-warning">
+                                                <i class="bi bi-credit-card me-2"></i> Formas de Pagamento
+                                            </a>
+                                            <a href="{{ url_for('reports.cashier_closing_report', unit_id=unit.id) }}" class="btn btn-outline-warning">
+                                                <i class="bi bi-calculator me-2"></i> Fechamento de Caixa
+                                            </a>
+                                            <a href="{{ url_for('reports.coins_movement_report', unit_id=unit.id) }}" class="btn btn-outline-warning">
+                                                <i class="bi bi-coin me-2"></i> Movimentação de Moedas
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="col-12">
+                            <div class="alert alert-warning">
+                                <i class="bi bi-exclamation-triangle me-2"></i> Nenhuma unidade encontrada.
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <h4 class="mb-3">Relatórios Disponíveis</h4>
+    
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-4">
+        <div class="col">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body text-center p-4">
+                    <div class="mb-3 text-warning">
+                        <i class="bi bi-graph-up-arrow" style="font-size: 48px;"></i>
+                    </div>
+                    <h5 class="card-title">Relatório Diário de Vendas</h5>
+                    <p class="card-text small text-muted">Resumo das vendas por caixa, forma de pagamento e comparativos com PDV.</p>
+                    {% if units %}
+                    <div class="mt-3">
+                        <select class="form-select unit-select" data-report="daily_sales">
+                            <option value="">Selecione uma unidade</option>
+                            {% for unit in units %}
+                            <option value="{{ unit.id }}">{{ unit.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body text-center p-4">
+                    <div class="mb-3 text-warning">
+                        <i class="bi bi-credit-card" style="font-size: 48px;"></i>
+                    </div>
+                    <h5 class="card-title">Formas de Pagamento</h5>
+                    <p class="card-text small text-muted">Análise das vendas por forma de pagamento, tendências e médias.</p>
+                    {% if units %}
+                    <div class="mt-3">
+                        <select class="form-select unit-select" data-report="payment_methods">
+                            <option value="">Selecione uma unidade</option>
+                            {% for unit in units %}
+                            <option value="{{ unit.id }}">{{ unit.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body text-center p-4">
+                    <div class="mb-3 text-warning">
+                        <i class="bi bi-calculator" style="font-size: 48px;"></i>
+                    </div>
+                    <h5 class="card-title">Fechamento de Caixa</h5>
+                    <p class="card-text small text-muted">Detalhamento completo dos fechamentos de caixa por dia.</p>
+                    {% if units %}
+                    <div class="mt-3">
+                        <select class="form-select unit-select" data-report="cashier_closing">
+                            <option value="">Selecione uma unidade</option>
+                            {% for unit in units %}
+                            <option value="{{ unit.id }}">{{ unit.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body text-center p-4">
+                    <div class="mb-3 text-warning">
+                        <i class="bi bi-coin" style="font-size: 48px;"></i>
+                    </div>
+                    <h5 class="card-title">Movimentação de Moedas</h5>
+                    <p class="card-text small text-muted">Histórico completo de movimentações de moedas e tendências.</p>
+                    {% if units %}
+                    <div class="mt-3">
+                        <select class="form-select unit-select" data-report="coins_movement">
+                            <option value="">Selecione uma unidade</option>
+                            {% for unit in units %}
+                            <option value="{{ unit.id }}">{{ unit.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        {% if current_user.is_superuser %}
+        <div class="col">
+            <div class="card h-100 shadow-sm border-danger">
+                <div class="card-body text-center p-4">
+                    <div class="mb-3" style="color: #f74d3e;">
+                        <i class="bi bi-calendar-month" style="font-size: 48px;"></i>
+                    </div>
+                    <h5 class="card-title">Faturamento Mensal</h5>
+                    <p class="card-text small text-muted">Análise mensal de faturamento com comparativos e gráficos.</p>
+                    <a href="{{ url_for('reports.monthly_revenue_report') }}" class="stretched-link"></a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col">
+            <div class="card h-100 shadow-sm border-danger">
+                <div class="card-body text-center p-4">
+                    <div class="mb-3" style="color: #f74d3e;">
+                        <i class="bi bi-receipt" style="font-size: 48px;"></i>
+                    </div>
+                    <h5 class="card-title">Despesas</h5>
+                    <p class="card-text small text-muted">Análise detalhada de despesas por categoria e impacto.</p>
+                    <a href="{{ url_for('reports.expenses_report') }}" class="stretched-link"></a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col">
+            <div class="card h-100 shadow-sm border-danger">
+                <div class="card-body text-center p-4">
+                    <div class="mb-3" style="color: #f74d3e;">
+                        <i class="bi bi-buildings" style="font-size: 48px;"></i>
+                    </div>
+                    <h5 class="card-title">Desempenho por Unidade</h5>
+                    <p class="card-text small text-muted">Comparativo de desempenho entre unidades e rankings.</p>
+                    <a href="{{ url_for('reports.unit_performance_report') }}" class="stretched-link"></a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col">
+            <div class="card h-100 shadow-sm border-danger">
+                <div class="card-body text-center p-4">
+                    <div class="mb-3" style="color: #f74d3e;">
+                        <i class="bi bi-cash-stack" style="font-size: 48px;"></i>
+                    </div>
+                    <h5 class="card-title">Fluxo de Caixa</h5>
+                    <p class="card-text small text-muted">Análise de fluxo de caixa com projeções e tendências.</p>
+                    <a href="{{ url_for('reports.cash_flow_report') }}" class="stretched-link"></a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col">
+            <div class="card h-100 shadow-sm border-danger">
+                <div class="card-body text-center p-4">
+                    <div class="mb-3" style="color: #f74d3e;">
+                        <i class="bi bi-percent" style="font-size: 48px;"></i>
+                    </div>
+                    <h5 class="card-title">Lucratividade</h5>
+                    <p class="card-text small text-muted">Análise completa de lucratividade e margens por unidade.</p>
+                    <a href="{{ url_for('reports.profitability_report') }}" class="stretched-link"></a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Redirecionar para relatório quando uma unidade for selecionada
+        const unitSelects = document.querySelectorAll('.unit-select');
+        unitSelects.forEach(select => {
+            select.addEventListener('change', function() {
+                const unitId = this.value;
+                const reportType = this.dataset.report;
+                
+                if (unitId) {
+                    window.location.href = `/reports/${reportType}/${unitId}`;
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

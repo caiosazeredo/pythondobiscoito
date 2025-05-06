@@ -1,0 +1,275 @@
+{% extends "base.html" %}
+
+{% block title %}Relatório de Fechamento de Caixa - {{ unit.name }} - Casa do Biscoito{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="position-relative mb-4">
+        <a href="{{ url_for('reports.reports_home') }}" class="btn btn-link text-warning position-absolute start-0">
+            <i class="bi bi-arrow-left-circle-fill fs-3"></i>
+        </a>
+        <h1 class="text-center">Relatório de Fechamento de Caixa</h1>
+        <h5 class="text-center text-muted">{{ unit.name }} - {{ report_date.strftime('%d/%m/%Y') }}</h5>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-md-6 offset-md-3">
+            <form method="post" class="card shadow-sm">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-5">
+                            <label for="cashier_id" class="form-label">Caixa</label>
+                            <select name="cashier_id" id="cashier_id" class="form-select">
+                                <option value="all">Todos os Caixas</option>
+                                {% for cashier in cashiers %}
+                                <option value="{{ cashier.id }}" {% if selected_cashier_id == cashier.id|string %}selected{% endif %}>
+                                    {% if cashier.number == 0 %}Caixa Financeiro{% else %}Caixa {{ cashier.number }}{% endif %}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <label for="report_date" class="form-label">Data</label>
+                            <input type="date" name="report_date" id="report_date" class="form-control" value="{{ report_date.strftime('%Y-%m-%d') }}">
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-warning w-100">Filtrar</button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    {% for cashier_number, movements in cashier_movements.items() %}
+    {% if movements %}
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        {% if cashier_number == 0 %}
+                        Caixa Financeiro
+                        {% else %}
+                        Caixa {{ cashier_number }}
+                        {% endif %}
+                    </h5>
+                    
+                    <div class="d-flex gap-3">
+                        <div class="text-success">
+                            <span class="fw-bold">Entradas:</span>
+                            R$ {{ "%.2f"|format(cashier_totals[cashier_number].total_entrada) }}
+                        </div>
+                        <div class="text-danger">
+                            <span class="fw-bold">Saídas:</span>
+                            R$ {{ "%.2f"|format(cashier_totals[cashier_number].total_saida + cashier_totals[cashier_number].total_estorno + cashier_totals[cashier_number].total_despesa) }}
+                        </div>
+                        <div class="{{ 'text-success' if cashier_totals[cashier_number].saldo >= 0 else 'text-danger' }}">
+                            <span class="fw-bold">Saldo:</span>
+                            R$ {{ "%.2f"|format(cashier_totals[cashier_number].saldo) }}
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-striped mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Horário</th>
+                                    <th>Tipo</th>
+                                    <th>Status</th>
+                                    <th>Forma</th>
+                                    <th>Valor</th>
+                                    <th>Descrição</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for movement in movements %}
+                                <tr>
+                                    <td>{{ movement.created_at.strftime('%H:%M') }}</td>
+                                    <td>
+                                        {% if movement.type == 'entrada' %}
+                                        <span class="badge bg-success">Entrada</span>
+                                        {% elif movement.type == 'estorno' %}
+                                        <span class="badge bg-danger">Estorno</span>
+                                        {% elif movement.type == 'despesa_loja' %}
+                                        <span class="badge bg-warning text-dark">Despesa</span>
+                                        {% elif movement.type == 'saida' %}
+                                        <span class="badge bg-danger">Saída</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">{{ movement.type }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge {{ 'bg-warning' if movement.payment_status == 'pendente' else 'bg-success' }}">
+                                            {{ "Pendente" if movement.payment_status == 'pendente' else "Realizado" }}
+                                        </span>
+                                    </td>
+                                    <td>{{ movement.payment_method_name }}</td>
+                                    <td class="fw-bold {{ 'text-success' if movement.type == 'entrada' else 'text-danger' }}">
+                                        R$ {{ "%.2f"|format(movement.amount) }}
+                                    </td>
+                                    <td>{{ movement.description }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer bg-light">
+                    <div class="row">
+                        <div class="col-md-7">
+                            <h6 class="mb-3">Movimentos por Forma de Pagamento</h6>
+                            <div class="d-flex flex-wrap gap-3">
+                                {% for method_name, method in cashier_totals[cashier_number].payment_methods.items() %}
+                                <div class="border rounded p-2">
+                                    <div class="d-flex flex-column">
+                                        <span class="fw-medium">{{ method.name }}</span>
+                                        <span class="text-success">R$ {{ "%.2f"|format(method.total) }}</span>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="col-md-5">
+                            <h6 class="mb-3">Comparativo com PDV</h6>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Valor Z (PDV):</span>
+                                <span class="fw-bold">R$ {{ "%.2f"|format(cashier_totals[cashier_number].z_value) }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Devoluções/Cancelamentos:</span>
+                                <span class="fw-bold text-danger">R$ {{ "%.2f"|format(cashier_totals[cashier_number].devo_value) }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Diferença (Vendas - Z):</span>
+                                <span class="fw-bold {{ 'text-success' if cashier_totals[cashier_number].total_entrada - cashier_totals[cashier_number].z_value - cashier_totals[cashier_number].devo_value >= 0 else 'text-danger' }}">
+                                    R$ {{ "%.2f"|format(cashier_totals[cashier_number].total_entrada - cashier_totals[cashier_number].z_value - cashier_totals[cashier_number].devo_value) }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="row">
+        <div class="col-md-12">
+            <div class="alert alert-info text-center">
+                <i class="bi bi-info-circle-fill me-2"></i> Nenhum movimento encontrado para os critérios selecionados.
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+    
+    {% if cashier_movements|length > 1 %}
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0">Resumo Consolidado</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <h6 class="mb-3">Totais por Tipo de Movimento</h6>
+                            
+                            {% set total_entrada = 0 %}
+                            {% set total_saida = 0 %}
+                            {% set total_estorno = 0 %}
+                            {% set total_despesa = 0 %}
+                            
+                            {% for number, totals in cashier_totals.items() %}
+                                {% set total_entrada = total_entrada + totals.total_entrada %}
+                                {% set total_saida = total_saida + totals.total_saida %}
+                                {% set total_estorno = total_estorno + totals.total_estorno %}
+                                {% set total_despesa = total_despesa + totals.total_despesa %}
+                            {% endfor %}
+                            
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Total de Entradas:</span>
+                                <span class="fw-bold text-success">R$ {{ "%.2f"|format(total_entrada) }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Total de Saídas:</span>
+                                <span class="fw-bold text-danger">R$ {{ "%.2f"|format(total_saida) }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Total de Estornos:</span>
+                                <span class="fw-bold text-danger">R$ {{ "%.2f"|format(total_estorno) }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Total de Despesas:</span>
+                                <span class="fw-bold text-danger">R$ {{ "%.2f"|format(total_despesa) }}</span>
+                            </div>
+                            <hr>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Saldo do Dia:</span>
+                                <span class="fw-bold {{ 'text-success' if total_entrada - total_saida - total_estorno - total_despesa >= 0 else 'text-danger' }}">
+                                    R$ {{ "%.2f"|format(total_entrada - total_saida - total_estorno - total_despesa) }}
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-8">
+                            <h6 class="mb-3">Distribuição por Caixa</h6>
+                            <canvas id="cashiersChart" width="100%" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        {% if cashier_movements|length > 1 %}
+        // Gráfico de distribuição por caixa
+        const cashiersCtx = document.getElementById('cashiersChart').getContext('2d');
+        
+        // Preparar dados
+        const cashierLabels = [];
+        const cashierValues = [];
+        const colors = [
+            '#4CAF50', '#2196F3', '#FFC107', '#F44336', '#9C27B0', 
+            '#00BCD4', '#FF9800', '#795548', '#607D8B', '#3F51B5'
+        ];
+        
+        {% for number, totals in cashier_totals.items() %}
+        cashierLabels.push('Caixa {{ number if number != 0 else "Financeiro" }}');
+        cashierValues.push({{ totals.total_entrada }});
+        {% endfor %}
+        
+        // Criar gráfico de barras
+        new Chart(cashiersCtx, {
+            type: 'bar',
+            data: {
+                labels: cashierLabels,
+                datasets: [{
+                    label: 'Entradas (R$)',
+                    data: cashierValues,
+                    backgroundColor: 'rgba(254, 195, 46, 0.7)',
+                    borderColor: 'rgba(254, 195, 46, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+        {% endif %}
+    });
+</script>
+{% endblock %}

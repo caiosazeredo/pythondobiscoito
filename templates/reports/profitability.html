@@ -1,0 +1,513 @@
+{% extends "base.html" %}
+
+{% block title %}Relatório de Lucratividade - Casa do Biscoito{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="position-relative mb-4">
+        <a href="{{ url_for('reports.reports_home') }}" class="btn btn-link text-warning position-absolute start-0">
+            <i class="bi bi-arrow-left-circle-fill fs-3"></i>
+        </a>
+        <h1 class="text-center">Relatório de Lucratividade</h1>
+        <h5 class="text-center text-muted">{{ period_name }}</h5>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-md-6 offset-md-3">
+            <form method="post" class="card shadow-sm">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label for="year" class="form-label">Ano</label>
+                            <select name="year" id="year" class="form-select">
+                                {% for y in range(year-2, year+1) %}
+                                <option value="{{ y }}" {% if year == y %}selected{% endif %}>{{ y }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="month" class="form-label">Mês</label>
+                            <select name="month" id="month" class="form-select">
+                                <option value="all" {% if month == 'all' %}selected{% endif %}>Todos os Meses</option>
+                                {% for i in range(1, 13) %}
+                                <option value="{{ i }}" {% if month == i %}selected{% endif %}>{{ calendar.month_name[i] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button type="submit" class="btn btn-warning w-100">Filtrar</button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0">Resumo de Lucratividade</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="d-flex flex-column align-items-center">
+                                <div class="text-success mb-2">
+                                    <i class="bi bi-graph-up-arrow fs-1"></i>
+                                </div>
+                                <h5 class="mb-1">Faturamento Total</h5>
+                                <h3 class="text-success">R$ {{ "%.2f"|format(total_revenue) }}</h3>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="d-flex flex-column align-items-center">
+                                <div class="text-danger mb-2">
+                                    <i class="bi bi-graph-down-arrow fs-1"></i>
+                                </div>
+                                <h5 class="mb-1">Despesas Totais</h5>
+                                <h3 class="text-danger">R$ {{ "%.2f"|format(total_expenses + total_refunds) }}</h3>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="d-flex flex-column align-items-center">
+                                <div class="text-warning mb-2">
+                                    <i class="bi bi-cash-stack fs-1"></i>
+                                </div>
+                                <h5 class="mb-1">Lucro</h5>
+                                <h3 class="{{ 'text-success' if total_profit >= 0 else 'text-danger' }}">
+                                    R$ {{ "%.2f"|format(total_profit) }}
+                                </h3>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="d-flex flex-column align-items-center">
+                                <div class="text-warning mb-2">
+                                    <i class="bi bi-percent fs-1"></i>
+                                </div>
+                                <h5 class="mb-1">Margem de Lucro</h5>
+                                <h3 class="{{ 'text-success' if total_profit_margin >= 0 else 'text-danger' }}">
+                                    {{ "%.1f"|format(total_profit_margin) }}%
+                                </h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0">Lucratividade por Unidade</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-striped mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Unidade</th>
+                                    <th class="text-end">Faturamento</th>
+                                    <th class="text-end">Despesas</th>
+                                    <th class="text-end">Lucro</th>
+                                    <th class="text-end">Margem</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for data in profitability_data %}
+                                <tr>
+                                    <td>{{ data.unit.name }}</td>
+                                    <td class="text-end text-success">R$ {{ "%.2f"|format(data.revenue) }}</td>
+                                    <td class="text-end text-danger">R$ {{ "%.2f"|format(data.expenses + data.refunds) }}</td>
+                                    <td class="text-end {{ 'text-success' if data.profit >= 0 else 'text-danger' }}">
+                                        R$ {{ "%.2f"|format(data.profit) }}
+                                    </td>
+                                    <td class="text-end {{ 'text-success' if data.profit_margin >= 0 else 'text-danger' }}">
+                                        {{ "%.1f"|format(data.profit_margin) }}%
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center">Nenhum dado disponível para o período.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot class="table-dark">
+                                <tr>
+                                    <th>Total</th>
+                                    <th class="text-end">R$ {{ "%.2f"|format(total_revenue) }}</th>
+                                    <th class="text-end">R$ {{ "%.2f"|format(total_expenses + total_refunds) }}</th>
+                                    <th class="text-end">R$ {{ "%.2f"|format(total_profit) }}</th>
+                                    <th class="text-end">{{ "%.1f"|format(total_profit_margin) }}%</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0">Gráficos Comparativos</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="nav nav-tabs" id="myTab" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="revenue-tab" data-bs-toggle="tab" data-bs-target="#revenue" type="button" role="tab" aria-controls="revenue" aria-selected="true">Faturamento</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="profit-tab" data-bs-toggle="tab" data-bs-target="#profit" type="button" role="tab" aria-controls="profit" aria-selected="false">Lucro</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="margin-tab" data-bs-toggle="tab" data-bs-target="#margin" type="button" role="tab" aria-controls="margin" aria-selected="false">Margem</button>
+                        </li>
+                    </ul>
+                    <div class="tab-content pt-3" id="myTabContent">
+                        <div class="tab-pane fade show active" id="revenue" role="tabpanel" aria-labelledby="revenue-tab">
+                            <canvas id="revenueChart" width="100%" height="300"></canvas>
+                        </div>
+                        <div class="tab-pane fade" id="profit" role="tabpanel" aria-labelledby="profit-tab">
+                            <canvas id="profitChart" width="100%" height="300"></canvas>
+                        </div>
+                        <div class="tab-pane fade" id="margin" role="tabpanel" aria-labelledby="margin-tab">
+                            <canvas id="marginChart" width="100%" height="300"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0">Unidade mais Lucrativa</h5>
+                </div>
+                <div class="card-body">
+                    {% if profitability_data %}
+                    {% set most_profitable = profitability_data|sort(attribute='profit_margin', reverse=True)|first %}
+                    <div class="text-center">
+                        <div class="mb-3 text-warning">
+                            <i class="bi bi-trophy-fill fs-1"></i>
+                        </div>
+                        <h4>{{ most_profitable.unit.name }}</h4>
+                        <div class="d-flex justify-content-between mt-3">
+                            <div>
+                                <h6>Faturamento</h6>
+                                <h4 class="text-success">R$ {{ "%.2f"|format(most_profitable.revenue) }}</h4>
+                            </div>
+                            <div>
+                                <h6>Lucro</h6>
+                                <h4 class="text-success">R$ {{ "%.2f"|format(most_profitable.profit) }}</h4>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <h6>Margem de Lucro</h6>
+                            <h2 class="text-success">{{ "%.1f"|format(most_profitable.profit_margin) }}%</h2>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted">
+                        <p>Nenhum dado disponível</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0">Unidade com Maior Faturamento</h5>
+                </div>
+                <div class="card-body">
+                    {% if profitability_data %}
+                    {% set highest_revenue = profitability_data|sort(attribute='revenue', reverse=True)|first %}
+                    <div class="text-center">
+                        <div class="mb-3 text-warning">
+                            <i class="bi bi-currency-dollar fs-1"></i>
+                        </div>
+                        <h4>{{ highest_revenue.unit.name }}</h4>
+                        <div class="mt-3">
+                            <h6>Faturamento</h6>
+                            <h2 class="text-success">R$ {{ "%.2f"|format(highest_revenue.revenue) }}</h2>
+                        </div>
+                        <div class="d-flex justify-content-between mt-3">
+                            <div>
+                                <h6>Despesas</h6>
+                                <h4 class="text-danger">R$ {{ "%.2f"|format(highest_revenue.expenses + highest_revenue.refunds) }}</h4>
+                            </div>
+                            <div>
+                                <h6>Margem</h6>
+                                <h4 class="{{ 'text-success' if highest_revenue.profit_margin >= 0 else 'text-danger' }}">
+                                    {{ "%.1f"|format(highest_revenue.profit_margin) }}%
+                                </h4>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted">
+                        <p>Nenhum dado disponível</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0">Oportunidades de Melhoria</h5>
+                </div>
+                <div class="card-body">
+                    {% if profitability_data %}
+                    {% set lowest_margin = profitability_data|sort(attribute='profit_margin')|first %}
+                    <div class="alert alert-warning mb-3">
+                        <div class="d-flex align-items-center">
+                            <div class="me-3">
+                                <i class="bi bi-lightbulb-fill fs-4"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-1">Foco em Otimização</h6>
+                                <p class="mb-0">Unidade com menor margem de lucro: <strong>{{ lowest_margin.unit.name }}</strong></p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-center mb-4">
+                        <h6>Margem Atual</h6>
+                        <h3 class="{{ 'text-success' if lowest_margin.profit_margin >= 0 else 'text-danger' }}">
+                            {{ "%.1f"|format(lowest_margin.profit_margin) }}%
+                        </h3>
+                    </div>
+                    
+                    <h6 class="mb-3">Recomendações Detalhadas:</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <h6><i class="bi bi-gear-fill me-2 text-warning"></i> Revisar estrutura de custos</h6>
+                                    <p class="small text-muted mb-0">Analise os principais componentes de custo desta unidade, identificando itens com valores discrepantes em comparação com outras unidades. Foque em redução de gastos desnecessários e negocie com fornecedores.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <h6><i class="bi bi-calendar-check me-2 text-warning"></i> Analisar despesas fixas</h6>
+                                    <p class="small text-muted mb-0">Avalie as despesas fixas mensais como aluguel, água, luz e internet. Busque oportunidades de redução ou renegociação destes valores. Compare estes custos com outras unidades de perfil similar.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <h6><i class="bi bi-speedometer2 me-2 text-warning"></i> Verificar eficiência operacional</h6>
+                                    <p class="small text-muted mb-0">Analise o quadro de funcionários, processos de produção e atendimento. Identifique gargalos e implemente melhorias para aumentar a produtividade. Considere realizar treinamentos específicos.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <h6><i class="bi bi-cart-check me-2 text-warning"></i> Avaliar mix de produtos</h6>
+                                    <p class="small text-muted mb-0">Verifique quais produtos têm maior margem de lucro e promova-os mais ativamente. Considere ajustar o foco para itens de maior rentabilidade e avaliar a possibilidade de novos produtos com margens melhores.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% if lowest_margin.profit_margin >= 15 %}
+                    <div class="alert alert-success mt-3">
+                        <i class="bi bi-check-circle-fill me-2"></i> Esta unidade já possui boas margens de lucro, mas estas ações podem melhorar ainda mais seu desempenho.
+                    </div>
+                    {% else %}
+                    <div class="alert alert-warning mt-3">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i> As recomendações acima devem ser priorizadas para melhorar significativamente a rentabilidade desta unidade.
+                    </div>
+                    {% endif %}
+                    
+                    {% else %}
+                    <div class="text-center text-muted">
+                        <p>Nenhum dado disponível para análise.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Converter dados JSON para objetos JavaScript
+        const revenueData = {{ revenue_data|safe }};
+        const profitData = {{ profit_data|safe }};
+        const marginData = {{ margin_data|safe }};
+        
+        // Gráfico de faturamento
+        const revenueCtx = document.getElementById('revenueChart').getContext('2d');
+        
+        new Chart(revenueCtx, {
+            type: 'bar',
+            data: {
+                labels: revenueData.map(item => item.name),
+                datasets: [{
+                    label: 'Faturamento (R$)',
+                    data: revenueData.map(item => item.value),
+                    backgroundColor: 'rgba(76, 175, 80, 0.7)',
+                    borderColor: 'rgba(76, 175, 80, 1)',
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                indexAxis: 'y',
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                return 'R$ ' + value.toFixed(2);
+                            }
+                        }
+                    },
+                    y: {
+                        grid: {
+                            display: false
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': R$ ' + context.parsed.x.toFixed(2);
+                            }
+                        }
+                    },
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+        
+        // Gráfico de lucro
+        const profitCtx = document.getElementById('profitChart').getContext('2d');
+        
+        new Chart(profitCtx, {
+            type: 'bar',
+            data: {
+                labels: profitData.map(item => item.name),
+                datasets: [{
+                    label: 'Lucro (R$)',
+                    data: profitData.map(item => item.value),
+                    backgroundColor: '#FEC32E',
+                    borderColor: '#e6b32a',
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                indexAxis: 'y',
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                return 'R$ ' + value.toFixed(2);
+                            }
+                        }
+                    },
+                    y: {
+                        grid: {
+                            display: false
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': R$ ' + context.parsed.x.toFixed(2);
+                            }
+                        }
+                    },
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+        
+        // Gráfico de margem
+        const marginCtx = document.getElementById('marginChart').getContext('2d');
+        
+        new Chart(marginCtx, {
+            type: 'bar',
+            data: {
+                labels: marginData.map(item => item.name),
+                datasets: [{
+                    label: 'Margem de Lucro (%)',
+                    data: marginData.map(item => item.value),
+                    backgroundColor: 'rgba(33, 150, 243, 0.7)',
+                    borderColor: 'rgba(33, 150, 243, 1)',
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                indexAxis: 'y',
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        }
+                    },
+                    y: {
+                        grid: {
+                            display: false
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': ' + context.parsed.x.toFixed(1) + '%';
+                            }
+                        }
+                    },
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

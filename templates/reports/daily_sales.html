@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+
+{% block title %}Relatório Diário de Vendas - {{ unit.name }} - Casa do Biscoito{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="position-relative mb-4">
+        <a href="{{ url_for('reports.reports_home') }}" class="btn btn-link text-warning position-absolute start-0">
+            <i class="bi bi-arrow-left-circle-fill fs-3"></i>
+        </a>
+        <h1 class="text-center">Relatório Diário de Vendas</h1>
+        <h5 class="text-center text-muted">{{ unit.name }} - {{ report_date.strftime('%d/%m/%Y') }}</h5>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-md-6 offset-md-3">
+            <form method="post" class="d-flex gap-2">
+                <input type="date" name="report_date" class="form-control" value="{{ report_date.strftime('%Y-%m-%d') }}">
+                <button type="submit" class="btn btn-warning">
+                    <i class="bi bi-search"></i> Filtrar
+                </button>
+            </form>
+        </div>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0">Resumo de Vendas</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="d-flex flex-column align-items-center">
+                                <div class="text-success mb-2">
+                                    <i class="bi bi-cash fs-1"></i>
+                                </div>
+                                <h5 class="mb-1">Total de Vendas (T)</h5>
+                                <h3 class="text-success">R$ {{ "%.2f"|format(total_t) }}</h3>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="d-flex flex-column align-items-center">
+                                <div class="text-danger mb-2">
+                                    <i class="bi bi-x-circle fs-1"></i>
+                                </div>
+                                <h5 class="mb-1">Cancelamentos</h5>
+                                <h3 class="text-danger">R$ {{ "%.2f"|format(total_devo) }}</h3>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="d-flex flex-column align-items-center">
+                                <div class="text-warning mb-2">
+                                    <i class="bi bi-receipt fs-1"></i>
+                                </div>
+                                <h5 class="mb-1">Valor Z (PDV)</h5>
+                                <h3 class="text-warning">R$ {{ "%.2f"|format(total_z) }}</h3>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="d-flex flex-column align-items-center">
+                                <div class="text-primary mb-2">
+                                    <i class="bi bi-calculator fs-1"></i>
+                                </div>
+                                <h5 class="mb-1">Diferença (T-Z)</h5>
+                                <h3 class="{{ 'text-success' if total_diff >= 0 else 'text-danger' }}">
+                                    R$ {{ "%.2f"|format(total_diff) }}
+                                </h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-7">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0">Vendas por Caixa</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-striped mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Caixa</th>
+                                    <th class="text-end">Vendas (T)</th>
+                                    <th class="text-end">Cancelamentos</th>
+                                    <th class="text-end">Z (PDV)</th>
+                                    <th class="text-end">Diferença</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for cashier_id, data in sales_by_cashier.items() %}
+                                <tr>
+                                    <td>
+                                        {% if data.cashier.number == 0 %}
+                                        Caixa Financeiro
+                                        {% else %}
+                                        Caixa {{ data.cashier.number }}
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end text-success">R$ {{ "%.2f"|format(data.t_value) }}</td>
+                                    <td class="text-end text-danger">R$ {{ "%.2f"|format(data.devo_value) }}</td>
+                                    <td class="text-end">R$ {{ "%.2f"|format(data.z_value) }}</td>
+                                    <td class="text-end {{ 'text-success' if data.diff_value >= 0 else 'text-danger' }}">
+                                        R$ {{ "%.2f"|format(data.diff_value) }}
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center">Nenhuma venda registrada para esta data.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot class="table-dark">
+                                <tr>
+                                    <th>Total</th>
+                                    <th class="text-end text-success">R$ {{ "%.2f"|format(total_t) }}</th>
+                                    <th class="text-end text-danger">R$ {{ "%.2f"|format(total_devo) }}</th>
+                                    <th class="text-end">R$ {{ "%.2f"|format(total_z) }}</th>
+                                    <th class="text-end {{ 'text-success' if total_diff >= 0 else 'text-danger' }}">
+                                        R$ {{ "%.2f"|format(total_diff) }}
+                                    </th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-5">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0">Vendas por Forma de Pagamento</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Forma de Pagamento</th>
+                                    <th class="text-end">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for method in total_by_payment_method %}
+                                <tr>
+                                    <td>{{ method.name }}</td>
+                                    <td class="text-end">R$ {{ "%.2f"|format(method.total) }}</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="2" class="text-center">Nenhuma venda registrada.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <hr>
+                    
+                    <h6 class="mb-3">Resumo por Categoria</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Categoria</th>
+                                    <th class="text-end">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for category, total in totals_by_category.items() %}
+                                <tr>
+                                    <td>{{ category|capitalize }}</td>
+                                    <td class="text-end fw-bold">R$ {{ "%.2f"|format(total) }}</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="2" class="text-center">Nenhuma venda registrada.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot class="table-dark">
+                                <tr>
+                                    <th>Total</th>
+                                    <th class="text-end">R$ {{ "%.2f"|format(total_t) }}</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <canvas id="paymentMethodChart" width="100%" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        {% for cashier_id, data in sales_by_cashier.items() %}
+        {% if data.payment_methods %}
+        <div class="col-md-4">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0">
+                        {% if data.cashier.number == 0 %}
+                        Caixa Financeiro
+                        {% else %}
+                        Caixa {{ data.cashier.number }}
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Forma de Pagamento</th>
+                                    <th class="text-end">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for method in data.payment_methods %}
+                                <tr>
+                                    <td>{{ method.name }}</td>
+                                    <td class="text-end">R$ {{ "%.2f"|format(method.total) }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot class="table-dark">
+                                <tr>
+                                    <th>Total</th>
+                                    <th class="text-end">R$ {{ "%.2f"|format(data.t_value) }}</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Gráfico de métodos de pagamento
+        const paymentMethodsCtx = document.getElementById('paymentMethodChart').getContext('2d');
+        
+        // Preparar dados
+        const categories = [];
+        const values = [];
+        const colors = [
+            '#4CAF50', '#2196F3', '#FFC107', '#F44336', '#9C27B0', 
+            '#00BCD4', '#FF9800', '#795548', '#607D8B', '#3F51B5'
+        ];
+        
+        {% for category, total in totals_by_category.items() %}
+        categories.push('{{ category|capitalize }}');
+        values.push({{ total }});
+        {% endfor %}
+        
+        // Criar gráfico
+        new Chart(paymentMethodsCtx, {
+            type: 'doughnut',
+            data: {
+                labels: categories,
+                datasets: [{
+                    data: values,
+                    backgroundColor: colors,
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% block title %}Relatório de Movimentação de Moedas - {{ unit.name }} - Casa do Biscoito{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="position-relative mb-4">
+        <a href="{{ url_for('reports.reports_home') }}" class="btn btn-link text-warning position-absolute start-0">
+            <i class="bi bi-arrow-left-circle-fill fs-3"></i>
+        </a>
+        <h1 class="text-center">Relatório de Movimentação de Moedas</h1>
+        <h5 class="text-center text-muted">{{ unit.name }}</h5>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-md-6 offset-md-3">
+            <form method="post" class="card shadow-sm">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-5">
+                            <label for="start_date" class="form-label">Data Inicial</label>
+                            <input type="date" name="start_date" id="start_date" class="form-control" value="{{ start_date.strftime('%Y-%m-%d') }}">
+                        </div>
+                        <div class="col-md-5">
+                            <label for="end_date" class="form-label">Data Final</label>
+                            <input type="date" name="end_date" id="end_date" class="form-control" value="{{ end_date.strftime('%Y-%m-%d') }}">
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-warning w-100">Filtrar</button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card shadow-sm text-center">
+                <div class="card-body">
+                    <div class="mb-3 text-warning">
+                        <i class="bi bi-coin fs-1"></i>
+                    </div>
+                    <h5 class="mb-1">Saldo Atual</h5>
+                    <h3 class="text-success">R$ {{ "%.2f"|format(current_balance) }}</h3>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card shadow-sm text-center">
+                <div class="card-body">
+                    <div class="mb-3 text-warning">
+                        <i class="bi bi-plus-circle fs-1"></i>
+                    </div>
+                    <h5 class="mb-1">Total Adicionado</h5>
+                    <h3 class="text-success">R$ {{ "%.2f"|format(total_added) }}</h3>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card shadow-sm text-center">
+                <div class="card-body">
+                    <div class="mb-3 text-warning">
+                        <i class="bi bi-dash-circle fs-1"></i>
+                    </div>
+                    <h5 class="mb-1">Total Retirado</h5>
+                    <h3 class="text-danger">R$ {{ "%.2f"|format(total_subtracted) }}</h3>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card shadow-sm text-center">
+                <div class="card-body">
+                    <div class="mb-3 text-warning">
+                        <i class="bi bi-bank fs-1"></i>
+                    </div>
+                    <h5 class="mb-1">Total Depositado</h5>
+                    <h3 class="text-primary">R$ {{ "%.2f"|format(total_deposited) }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0">Tendência Diária</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="dailyTrendChart" width="100%" height="300"></canvas>
+                </div>
+            </div>
+            
+            {% if alerts %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0">Alertas</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        Valores diários acima da média foram detectados
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th class="text-end">Valor Líquido</th>
+                                    <th class="text-end">% Acima da Média</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for alert in alerts %}
+                                <tr>
+                                    <td>{{ alert.date.strftime('%d/%m/%Y') }}</td>
+                                    <td class="text-end text-success">R$ {{ "%.2f"|format(alert.value) }}</td>
+                                    <td class="text-end">+{{ "%.1f"|format(alert.percentage) }}%</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot>
+                                <tr class="table-light">
+                                    <td>Média Diária</td>
+                                    <td class="text-end">R$ {{ "%.2f"|format(average_daily_net) }}</td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0">Histórico de Movimentações</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                        <table class="table table-sm table-striped mb-0">
+                            <thead class="sticky-top bg-white">
+                                <tr>
+                                    <th>Data/Hora</th>
+                                    <th>Ação</th>
+                                    <th class="text-end">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for entry in coins_history %}
+                                <tr>
+                                    <td>{{ entry.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                                    <td>
+                                        {% if entry.action == 'add' and entry.amount > 0 %}
+                                        <span class="badge bg-success">Adição</span>
+                                        {% elif entry.action == 'add' and entry.amount < 0 %}
+                                        <span class="badge bg-danger">Retirada</span>
+                                        {% elif entry.action == 'deposit' %}
+                                        <span class="badge bg-primary">Depósito</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">{{ entry.action }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end {{ 'text-success' if entry.amount > 0 else 'text-danger' }}">
+                                        R$ {{ "%.2f"|format(entry.amount) }}
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="3" class="text-center py-3">Nenhum registro encontrado</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Gráfico de tendência diária
+        const dailyTrendCtx = document.getElementById('dailyTrendChart').getContext('2d');
+        
+        // Converter dados JSON para objetos JavaScript
+        const graphData = {{ graph_data|safe }};
+        
+        const dates = graphData.map(item => item.date);
+        const values = graphData.map(item => item.value);
+        
+        // Criar gráfico de linha
+        new Chart(dailyTrendCtx, {
+            type: 'line',
+            data: {
+                labels: dates,
+                datasets: [{
+                    label: 'Movimentação Líquida (R$)',
+                    data: values,
+                    borderColor: '#FEC32E',
+                    backgroundColor: 'rgba(254, 195, 46, 0.1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,349 @@
+{% extends "base.html" %}
+
+{% block title %}Relatório de Fluxo de Caixa - Casa do Biscoito{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="position-relative mb-4">
+        <a href="{{ url_for('reports.reports_home') }}" class="btn btn-link text-warning position-absolute start-0">
+            <i class="bi bi-arrow-left-circle-fill fs-3"></i>
+        </a>
+        <h1 class="text-center">Relatório de Fluxo de Caixa</h1>
+        <h5 class="text-center text-muted">{{ start_date.strftime('%d/%m/%Y') }} a {{ end_date.strftime('%d/%m/%Y') }}</h5>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-md-8 offset-md-2">
+            <form method="post" class="card shadow-sm">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label for="unit_id" class="form-label">Unidade</label>
+                            <select name="unit_id" id="unit_id" class="form-select">
+                                <option value="all">Todas as Unidades</option>
+                                {% for unit in units %}
+                                <option value="{{ unit.id }}" {% if selected_unit_id == unit.id|string %}selected{% endif %}>{{ unit.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="period" class="form-label">Período</label>
+                            <select name="period" id="period" class="form-select">
+                                <option value="week" {% if period == 'week' %}selected{% endif %}>Semanal</option>
+                                <option value="month" {% if period == 'month' %}selected{% endif %}>Mensal</option>
+                                <option value="quarter" {% if period == 'quarter' %}selected{% endif %}>Trimestral</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button type="submit" class="btn btn-warning w-100">Filtrar</button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0">Fluxo de Caixa - Período Atual</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="flowChart" width="100%" height="350"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-md-7">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0">Detalhamento do Fluxo</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-striped mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th class="text-end">Entradas</th>
+                                    <th class="text-end">Saídas</th>
+                                    <th class="text-end">Saldo</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for day in flow_data %}
+                                <tr>
+                                    <td>{{ day.date.strftime('%d/%m/%Y') }}</td>
+                                    <td class="text-end text-success">R$ {{ "%.2f"|format(day.income) }}</td>
+                                    <td class="text-end text-danger">R$ {{ "%.2f"|format(day.outcome) }}</td>
+                                    <td class="text-end {{ 'text-success' if day.net >= 0 else 'text-danger' }}">
+                                        R$ {{ "%.2f"|format(day.net) }}
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="4" class="text-center">Nenhum dado disponível para o período.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot class="table-dark">
+                                <tr>
+                                    <th>Médias Diárias</th>
+                                    <th class="text-end">R$ {{ "%.2f"|format(avg_income) }}</th>
+                                    <th class="text-end">R$ {{ "%.2f"|format(avg_outcome) }}</th>
+                                    <th class="text-end">R$ {{ "%.2f"|format(avg_income - avg_outcome) }}</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-5">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0">Projeção - Próximo Período</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="projectionChart" width="100%" height="200"></canvas>
+                    
+                    <div class="alert alert-warning mt-3">
+                        <div class="d-flex align-items-center">
+                            <div class="me-3">
+                                <i class="bi bi-info-circle-fill fs-4"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-1">Projeção Baseada em Tendências</h6>
+                                <p class="mb-0 small">A projeção é calculada com base no histórico, considerando os padrões de sazonalidade.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card shadow-sm">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0">Análise de Movimentação</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        <h6>Dias com Maior Faturamento</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th class="text-end">Valor</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for day in best_income_days %}
+                                    <tr>
+                                        <td>{{ day.date.strftime('%d/%m/%Y') }}</td>
+                                        <td class="text-end text-success">R$ {{ "%.2f"|format(day.income) }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <h6>Dias com Menor Faturamento</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th class="text-end">Valor</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for day in worst_income_days %}
+                                    <tr>
+                                        <td>{{ day.date.strftime('%d/%m/%Y') }}</td>
+                                        <td class="text-end text-danger">R$ {{ "%.2f"|format(day.income) }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Gráfico de fluxo de caixa
+        const flowCtx = document.getElementById('flowChart').getContext('2d');
+        
+        // Converter dados JSON para objetos JavaScript
+        const graphData = {{ graph_data|safe }};
+        const projectionData = {{ projection_graph_data|safe }};
+        
+        // Preparar dados para o gráfico
+        const dates = graphData.map(item => item.date);
+        const incomes = graphData.map(item => item.income);
+        const outcomes = graphData.map(item => item.outcome);
+        const nets = graphData.map(item => item.net);
+        
+        // Criar gráfico de linha com configurações melhoradas
+        new Chart(flowCtx, {
+            type: 'line',
+            data: {
+                labels: dates,
+                datasets: [
+                    {
+                        label: 'Entradas',
+                        data: incomes,
+                        borderColor: 'rgba(76, 175, 80, 1)',
+                        backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                        borderWidth: 2,
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    },
+                    {
+                        label: 'Saídas',
+                        data: outcomes,
+                        borderColor: 'rgba(244, 67, 54, 1)',
+                        backgroundColor: 'rgba(244, 67, 54, 0.1)',
+                        borderWidth: 2,
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    },
+                    {
+                        label: 'Saldo',
+                        data: nets,
+                        borderColor: '#FEC32E',
+                        backgroundColor: 'rgba(254, 195, 46, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                return 'R$ ' + value.toFixed(2);
+                            }
+                        }
+                    },
+                    x: {
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': R$ ' + context.parsed.y.toFixed(2);
+                            }
+                        }
+                    },
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            usePointStyle: true,
+                            padding: 20
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Melhoria no gráfico de projeção
+        const projectionCtx = document.getElementById('projectionChart').getContext('2d');
+        
+        // Preparar dados para o gráfico de projeção
+        const projDates = projectionData.map(item => item.date);
+        const projNets = projectionData.map(item => item.net);
+        
+        // Criar gráfico de linha para projeção com melhorias
+        new Chart(projectionCtx, {
+            type: 'line',
+            data: {
+                labels: projDates,
+                datasets: [
+                    {
+                        label: 'Projeção de Saldo',
+                        data: projNets,
+                        borderColor: 'rgba(156, 39, 176, 1)',
+                        backgroundColor: 'rgba(156, 39, 176, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                return 'R$ ' + value.toFixed(2);
+                            }
+                        }
+                    },
+                    x: {
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': R$ ' + context.parsed.y.toFixed(2);
+                            }
+                        }
+                    },
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            usePointStyle: true
+                        }
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

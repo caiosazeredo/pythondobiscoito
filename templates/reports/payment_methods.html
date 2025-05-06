@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+
+{% block title %}Relatório de Formas de Pagamento - {{ unit.name }} - Casa do Biscoito{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="position-relative mb-4">
+        <a href="{{ url_for('reports.reports_home') }}" class="btn btn-link text-warning position-absolute start-0">
+            <i class="bi bi-arrow-left-circle-fill fs-3"></i>
+        </a>
+        <h1 class="text-center">Relatório de Formas de Pagamento</h1>
+        <h5 class="text-center text-muted">{{ unit.name }}</h5>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-md-6 offset-md-3">
+            <form method="post" class="card shadow-sm">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-5">
+                            <label for="start_date" class="form-label">Data Inicial</label>
+                            <input type="date" name="start_date" id="start_date" class="form-control" value="{{ start_date.strftime('%Y-%m-%d') }}">
+                        </div>
+                        <div class="col-md-5">
+                            <label for="end_date" class="form-label">Data Final</label>
+                            <input type="date" name="end_date" id="end_date" class="form-control" value="{{ end_date.strftime('%Y-%m-%d') }}">
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-warning w-100">Filtrar</button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="alert alert-light border">
+                <div class="d-flex align-items-center">
+                    <div class="me-3 text-warning">
+                        <i class="bi bi-info-circle-fill fs-4"></i>
+                    </div>
+                    <div>
+                        <h5 class="mb-1">Período de Análise</h5>
+                        <p class="mb-0">De {{ start_date.strftime('%d/%m/%Y') }} até {{ end_date.strftime('%d/%m/%Y') }}</p>
+                    </div>
+                    <div class="ms-auto">
+                        <h5 class="mb-1">Total de Vendas</h5>
+                        <h3 class="mb-0 text-success">R$ {{ "%.2f"|format(grand_total) }}</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-5">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0">Distribuição por Categoria</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        <canvas id="categoriesChart" width="100%" height="300"></canvas>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Categoria</th>
+                                    <th class="text-end">Valor</th>
+                                    <th class="text-end">Transações</th>
+                                    <th class="text-end">%</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for category in categories %}
+                                <tr>
+                                    <td>{{ category.category|capitalize }}</td>
+                                    <td class="text-end">R$ {{ "%.2f"|format(category.total) }}</td>
+                                    <td class="text-end">{{ category.count }}</td>
+                                    <td class="text-end">{{ "%.1f"|format(category.percentage) }}%</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="4" class="text-center">Nenhuma venda registrada para este período.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot class="table-dark">
+                                <tr>
+                                    <th>Total</th>
+                                    <th class="text-end">R$ {{ "%.2f"|format(grand_total) }}</th>
+                                    <th class="text-end">{{ total_count }}</th>
+                                    <th class="text-end">100%</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-7">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0">Detalhamento por Método de Pagamento</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Método</th>
+                                    <th>Categoria</th>
+                                    <th class="text-end">Valor Total</th>
+                                    <th class="text-end">Transações</th>
+                                    <th class="text-end">Valor Médio</th>
+                                    <th class="text-end">%</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for method in methods %}
+                                <tr>
+                                    <td>{{ method.name }}</td>
+                                    <td><span class="badge bg-light text-dark">{{ method.category|capitalize }}</span></td>
+                                    <td class="text-end">R$ {{ "%.2f"|format(method.total) }}</td>
+                                    <td class="text-end">{{ method.count }}</td>
+                                    <td class="text-end">R$ {{ "%.2f"|format(method.average) }}</td>
+                                    <td class="text-end">{{ "%.1f"|format(method.percentage) }}%</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="6" class="text-center">Nenhuma venda registrada para este período.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <h5 class="mb-3">Tendência de Uso</h5>
+                        <canvas id="methodsChart" width="100%" height="300"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Gráfico de categorias
+        const categoriesCtx = document.getElementById('categoriesChart').getContext('2d');
+        
+        // Preparar dados
+        const categoryLabels = [];
+        const categoryValues = [];
+        const colors = [
+            '#4CAF50', '#2196F3', '#FFC107', '#F44336', '#9C27B0', 
+            '#00BCD4', '#FF9800', '#795548', '#607D8B', '#3F51B5'
+        ];
+        
+        {% for category in categories %}
+        categoryLabels.push('{{ category.category|capitalize }}');
+        categoryValues.push({{ category.total }});
+        {% endfor %}
+        
+        // Criar gráfico de pizza
+        new Chart(categoriesCtx, {
+            type: 'doughnut',
+            data: {
+                labels: categoryLabels,
+                datasets: [{
+                    data: categoryValues,
+                    backgroundColor: colors.slice(0, categoryLabels.length),
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                    }
+                }
+            }
+        });
+        
+        // Gráfico de métodos
+        const methodsCtx = document.getElementById('methodsChart').getContext('2d');
+        
+        // Converter dados JSON para objetos JavaScript
+        const graphData = {{ graph_data|safe }};
+        
+        const methodLabels = graphData.map(item => item.name);
+        const methodValues = graphData.map(item => item.value);
+        
+        // Criar gráfico de barras
+        new Chart(methodsCtx, {
+            type: 'bar',
+            data: {
+                labels: methodLabels,
+                datasets: [{
+                    label: 'Valor Total (R$)',
+                    data: methodValues,
+                    backgroundColor: 'rgba(254, 195, 46, 0.7)',
+                    borderColor: 'rgba(254, 195, 46, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}
