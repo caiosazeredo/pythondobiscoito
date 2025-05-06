@@ -7,7 +7,7 @@ import os
 import pymysql
 from reports import reports
 from pymysql.cursors import DictCursor
-from configantiga import Config
+from config import Config
 from flask_mail import Mail, Message
 from decimal import Decimal
 
