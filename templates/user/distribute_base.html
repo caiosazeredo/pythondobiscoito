@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+
+{% block title %}Distribuir Valor Base - {{ unit.name }} - Casa do Biscoito{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="position-relative mb-4">
+        <a href="{{ url_for('user_monthly_base', unit_id=unit.id) }}" class="btn btn-link text-warning position-absolute start-0">
+            <i class="bi bi-arrow-left-circle-fill fs-3"></i>
+        </a>
+        <h1 class="text-center">Distribuir Valor Base</h1>
+        <h5 class="text-center text-muted">{{ unit.name }} - {{ month_name }} de {{ current_year }}</h5>
+    </div>
+    
+    <div class="row justify-content-center mb-4">
+        <div class="col-md-8">
+            <div class="card shadow-sm bg-light">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Valor Base Total</h5>
+                        <h3 class="text-success mb-0">R$ {{ "%.2f"|format(monthly_base.amount) }}</h3>
+                    </div>
+                    <div class="progress mt-2" style="height: 6px;">
+                        <div class="progress-bar bg-warning" role="progressbar" style="width: {{ (total_distributed / monthly_base.amount * 100) if monthly_base.amount > 0 else 0 }}%"></div>
+                    </div>
+                    <div class="d-flex justify-content-between small text-muted mt-1">
+                        <span>Distribuído: R$ {{ "%.2f"|format(total_distributed) }}</span>
+                        <span>Restante: R$ {{ "%.2f"|format(monthly_base.amount - total_distributed) }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <form method="post" action="{{ url_for('user_distribute_base', unit_id=unit.id) }}">
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+            {% for cashier in cashiers %}
+            {% if cashier.number > 0 %}
+            <div class="col">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">Caixa {{ cashier.number }}</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="amount_{{ cashier.id }}" class="form-label">Valor Base</label>
+                            <div class="input-group">
+                                <span class="input-group-text">R$</span>
+                                <input type="number" class="form-control cashier-amount" 
+                                       id="amount_{{ cashier.id }}" 
+                                       name="amount_{{ cashier.id }}" 
+                                       step="0.01" min="0" 
+                                       value="{{ cashier_values[cashier.id] if cashier.id in cashier_values else 0 }}">
+                            </div>
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" 
+                                   id="active_{{ cashier.id }}" 
+                                   name="active_{{ cashier.id }}" 
+                                   {{ 'checked' if cashier.status == 'aberto' else '' }}>
+                            <label class="form-check-label" for="active_{{ cashier.id }}">
+                                {{ 'Ativo' if cashier.status == 'aberto' else 'Inativo' }}
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+        
+        <div class="row mt-4">
+            <div class="col-md-12 text-center">
+                <button type="button" id="btnDistributeEqual" class="btn btn-outline-warning me-2">
+                    <i class="bi bi-distribute-horizontal me-1"></i> Distribuir Igualmente
+                </button>
+                <button type="submit" class="btn btn-warning">
+                    <i class="bi bi-save me-1"></i> Salvar Distribuição
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const totalBase = {{ monthly_base.amount }};
+        const inputs = document.querySelectorAll('.cashier-amount');
+        const distributeEqualBtn = document.getElementById('btnDistributeEqual');
+        const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+        
+        // Função para atualizar o total e a barra de progresso
+        function updateTotal() {
+            let totalDistributed = 0;
+            
+            inputs.forEach(input => {
+                totalDistributed += parseFloat(input.value || 0);
+            });
+            
+            const progressBar = document.querySelector('.progress-bar');
+            const percentage = (totalDistributed / totalBase * 100) || 0;
+            
+            progressBar.style.width = `${Math.min(percentage, 100)}%`;
+            progressBar.classList.remove('bg-warning', 'bg-danger', 'bg-success');
+            
+            if (percentage > 100) {
+                progressBar.classList.add('bg-danger');
+            } else if (percentage === 100) {
+                progressBar.classList.add('bg-success');
+            } else {
+                progressBar.classList.add('bg-warning');
+            }
+            
+            // Atualizar textos informativos
+            document.querySelector('.d-flex.justify-content-between.small.text-muted.mt-1 span:first-child').textContent = 
+                `Distribuído: R$ ${totalDistributed.toFixed(2)}`;
+            document.querySelector('.d-flex.justify-content-between.small.text-muted.mt-1 span:last-child').textContent = 
+                `Restante: R$ ${(totalBase - totalDistributed).toFixed(2)}`;
+        }
+        
+        // Atualizar valor total distribuído quando os valores forem alterados
+        inputs.forEach(input => {
+            input.addEventListener('input', updateTotal);
+        });
+        
+        // Botão para distribuir igualmente
+        if (distributeEqualBtn) {
+            distributeEqualBtn.addEventListener('click', function() {
+                // Verificar se temos caixas ativos
+                const activeCashiers = Array.from(checkboxes).filter(checkbox => checkbox.checked);
+                
+                if (activeCashiers.length > 0) {
+                    const equalAmount = (totalBase / activeCashiers.length).toFixed(2);
+                    
+                    // Para cada checkbox
+                    checkboxes.forEach((checkbox, i) => {
+                        // Encontrar o input correspondente
+                        // ID do checkbox é "active_X" e o input é "amount_X"
+                        const cashierId = checkbox.id.replace('active_', '');
+                        const input = document.getElementById('amount_' + cashierId);
+                        
+                        // Se o checkbox estiver marcado, atribuir valor igual
+                        if (checkbox.checked) {
+                            input.value = equalAmount;
+                        } else {
+                            // Se não estiver marcado, zerar o valor
+                            input.value = '0';
+                        }
+                    });
+                    
+                    // Atualizar totais e barra de progresso
+                    updateTotal();
+                } else {
+                    alert('Ative pelo menos um caixa para distribuir os valores.');
+                }
+            });
+        }
+        
+        // Atualizar quando um checkbox for alterado
+        checkboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                // Se um caixa for desativado, zerar seu valor
+                if (!this.checked) {
+                    const cashierId = this.id.replace('active_', '');
+                    const input = document.getElementById('amount_' + cashierId);
+                    input.value = '0';
+                    updateTotal();
+                }
+            });
+        });
+        
+        // Inicializar a exibição
+        updateTotal();
+    });
+</script>
+{% endblock %}

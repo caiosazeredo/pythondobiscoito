@@ -1615,6 +1615,310 @@ def user_movements(unit_id, cashier_id):
         coins_total=coins_total
     )
 
+@app.route('/user/profile', methods=['GET', 'POST'])
+@login_required
+def user_edit_profile():
+    """
+    Rota para edição do perfil do usuário logado.
+    Permite alterar nome, email, CPF, telefone e senha.
+    """
+    # Obter os dados atuais do usuário
+    user_id = current_user.id
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        if request.method == 'POST':
+            # Obter dados do formulário
+            name = request.form.get('name')
+            email = request.form.get('email')
+            cpf = request.form.get('cpf')
+            phone = request.form.get('phone')
+            
+            # Verificar se o email existe (caso tenha mudado)
+            if email != current_user.email:
+                cursor.execute("SELECT id FROM user WHERE email = %s AND id != %s", (email, user_id))
+                existing_user = cursor.fetchone()
+                
+                if existing_user:
+                    flash('Este email já está cadastrado por outro usuário!', 'error')
+                    return redirect(url_for('user_edit_profile'))
+            
+            # Atualizar dados básicos
+            cursor.execute(
+                "UPDATE user SET name = %s, email = %s, cpf = %s, phone = %s WHERE id = %s",
+                (name, email, cpf, phone, user_id)
+            )
+            
+            # Verificar se há alteração de senha
+            current_password = request.form.get('current_password')
+            new_password = request.form.get('new_password')
+            confirm_password = request.form.get('confirm_password')
+            
+            if current_password and new_password and confirm_password:
+                # Verificar se a senha atual está correta
+                cursor.execute("SELECT password_hash FROM user WHERE id = %s", (user_id,))
+                user_data = cursor.fetchone()
+                
+                if check_password_hash(user_data['password_hash'], current_password):
+                    if new_password == confirm_password:
+                        # Atualizar senha
+                        password_hash = generate_password_hash(new_password)
+                        cursor.execute(
+                            "UPDATE user SET password_hash = %s WHERE id = %s",
+                            (password_hash, user_id)
+                        )
+                        flash('Senha atualizada com sucesso!', 'success')
+                    else:
+                        flash('A nova senha e a confirmação não coincidem!', 'error')
+                        conn.rollback()
+                        cursor.close()
+                        conn.close()
+                        return redirect(url_for('user_edit_profile'))
+                else:
+                    flash('Senha atual incorreta!', 'error')
+                    conn.rollback()
+                    cursor.close()
+                    conn.close()
+                    return redirect(url_for('user_edit_profile'))
+            
+            conn.commit()
+            flash('Perfil atualizado com sucesso!', 'success')
+            
+            # Atualizar objeto do usuário atual
+            current_user.name = name
+            current_user.email = email
+            current_user.cpf = cpf
+            current_user.phone = phone
+            
+            return redirect(url_for('index'))
+        
+        cursor.close()
+        conn.close()
+        
+        return render_template('user/edit_profile.html')
+    
+    except Exception as e:
+        conn.rollback()
+        cursor.close()
+        conn.close()
+        flash(f'Erro ao atualizar perfil: {str(e)}', 'error')
+        return redirect(url_for('user_edit_profile'))
+    
+@app.route('/user/unit/<int:unit_id>/monthly_base', methods=['GET', 'POST'])
+@login_required
+def user_monthly_base(unit_id):
+    """
+    Rota para configuração do valor base mensal por usuários comuns.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Verificar se a unidade existe
+    cursor.execute("SELECT * FROM unit WHERE id = %s", (unit_id,))
+    unit = cursor.fetchone()
+    
+    if not unit:
+        cursor.close()
+        conn.close()
+        flash('Unidade não encontrada!', 'error')
+        return redirect(url_for('user_home'))
+    
+    # Verificar se o usuário tem acesso à unidade
+    if not current_user.is_superuser:
+        cursor.execute(
+            "SELECT * FROM user_unit WHERE user_id = %s AND unit_id = %s",
+            (current_user.id, unit_id)
+        )
+        has_access = cursor.fetchone() is not None
+        
+        if not has_access:
+            cursor.close()
+            conn.close()
+            flash('Acesso não autorizado a esta unidade!', 'error')
+            return redirect(url_for('user_home'))
+    
+    today = datetime.now()
+    current_month = today.month
+    current_year = today.year
+    
+    # Verificar se já existe um valor base para o mês atual
+    cursor.execute(
+        "SELECT * FROM monthly_base_amount WHERE unit_id = %s AND month = %s AND year = %s",
+        (unit_id, current_month, current_year)
+    )
+    monthly_base = cursor.fetchone()
+    
+    # Obter valor do mês anterior para referência
+    prev_month = current_month - 1 if current_month > 1 else 12
+    prev_year = current_year if current_month > 1 else current_year - 1
+    
+    cursor.execute(
+        "SELECT amount FROM monthly_base_amount WHERE unit_id = %s AND month = %s AND year = %s",
+        (unit_id, prev_month, prev_year)
+    )
+    prev_month_result = cursor.fetchone()
+    previous_month_amount = prev_month_result['amount'] if prev_month_result else 0
+    
+    if request.method == 'POST':
+        amount = float(request.form.get('amount', 0))
+        
+        if monthly_base:
+            # Atualizar valor existente
+            cursor.execute(
+                "UPDATE monthly_base_amount SET amount = %s WHERE id = %s",
+                (amount, monthly_base['id'])
+            )
+        else:
+            # Criar novo registro
+            cursor.execute(
+                "INSERT INTO monthly_base_amount (unit_id, month, year, amount) VALUES (%s, %s, %s, %s)",
+                (unit_id, current_month, current_year, amount)
+            )
+        
+        conn.commit()
+        flash('Valor base mensal atualizado com sucesso!', 'success')
+        
+        # Redirecionar para distribuição do valor base
+        return redirect(url_for('user_distribute_base', unit_id=unit_id))
+    
+    # Obter histórico de valores base
+    cursor.execute(
+        "SELECT month, year, amount FROM monthly_base_amount WHERE unit_id = %s ORDER BY year DESC, month DESC LIMIT 12",
+        (unit_id,)
+    )
+    base_history = cursor.fetchall()
+    
+    cursor.close()
+    conn.close()
+    
+    return render_template(
+        'user/monthly_base.html',
+        unit=unit,
+        monthly_base=monthly_base,
+        current_month=current_month,
+        current_year=current_year,
+        month_name=calendar.month_name[current_month],
+        base_history=base_history,
+        calendar=calendar,
+        previous_month_amount=previous_month_amount
+    )
+
+@app.route('/user/unit/<int:unit_id>/distribute_base', methods=['GET', 'POST'])
+@login_required
+def user_distribute_base(unit_id):
+    """
+    Rota para distribuição do valor base mensal entre os caixas.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Verificar se a unidade existe
+    cursor.execute("SELECT * FROM unit WHERE id = %s", (unit_id,))
+    unit = cursor.fetchone()
+    
+    if not unit:
+        cursor.close()
+        conn.close()
+        flash('Unidade não encontrada!', 'error')
+        return redirect(url_for('user_home'))
+    
+    # Verificar se o usuário tem acesso à unidade
+    if not current_user.is_superuser:
+        cursor.execute(
+            "SELECT * FROM user_unit WHERE user_id = %s AND unit_id = %s",
+            (current_user.id, unit_id)
+        )
+        has_access = cursor.fetchone() is not None
+        
+        if not has_access:
+            cursor.close()
+            conn.close()
+            flash('Acesso não autorizado a esta unidade!', 'error')
+            return redirect(url_for('user_home'))
+    
+    today = datetime.now()
+    current_month = today.month
+    current_year = today.year
+    
+    # Obter valor base do mês atual
+    cursor.execute(
+        "SELECT * FROM monthly_base_amount WHERE unit_id = %s AND month = %s AND year = %s",
+        (unit_id, current_month, current_year)
+    )
+    monthly_base = cursor.fetchone()
+    
+    if not monthly_base:
+        cursor.close()
+        conn.close()
+        flash('Primeiro defina o valor base mensal!', 'warning')
+        return redirect(url_for('user_monthly_base', unit_id=unit_id))
+    
+    # Obter caixas da unidade (exceto o financeiro)
+    cursor.execute("SELECT * FROM cashier WHERE unit_id = %s AND number > 0 ORDER BY number", (unit_id,))
+    cashiers = cursor.fetchall()
+    
+    # Estrutura para armazenar os valores distribuídos por caixa
+    cashier_values = {}
+    total_distributed = 0
+    
+    # Processar a distribuição se for POST
+    if request.method == 'POST':
+        for cashier in cashiers:
+            # Obter valor para este caixa
+            amount_key = f'amount_{cashier["id"]}'
+            active_key = f'active_{cashier["id"]}'
+            
+            amount = float(request.form.get(amount_key, 0))
+            is_active = active_key in request.form
+            
+            # Atualizar status do caixa
+            status = 'aberto' if is_active else 'fechado'
+            cursor.execute(
+                "UPDATE cashier SET status = %s WHERE id = %s",
+                (status, cashier['id'])
+            )
+            
+            # Armazenar o valor base para este caixa
+            # Aqui você pode implementar a lógica para salvar esses valores em uma tabela específica
+            # Por enquanto, apenas vamos acumular o total
+            cashier_values[cashier['id']] = amount
+            total_distributed += amount
+        
+        conn.commit()
+        flash('Distribuição de valores realizada com sucesso!', 'success')
+        return redirect(url_for('user_cashiers', unit_id=unit_id))
+    else:
+        # No caso de GET, podemos pegar valores previamente distribuídos
+        # ou distribuir o valor total igualmente entre os caixas ativos
+        active_cashiers = [c for c in cashiers if c['status'] == 'aberto']
+        
+        if active_cashiers:
+            equal_amount = monthly_base['amount'] / len(active_cashiers)
+            
+            for cashier in cashiers:
+                if cashier['status'] == 'aberto':
+                    cashier_values[cashier['id']] = equal_amount
+                    total_distributed += equal_amount
+                else:
+                    cashier_values[cashier['id']] = 0
+    
+    cursor.close()
+    conn.close()
+    
+    return render_template(
+        'user/distribute_base.html',
+        unit=unit,
+        cashiers=cashiers,
+        monthly_base=monthly_base,
+        current_month=current_month,
+        current_year=current_year,
+        month_name=calendar.month_name[current_month],
+        cashier_values=cashier_values,
+        total_distributed=total_distributed
+    )    
+
 # Rota para obter métodos de pagamento via AJAX
 @app.route('/api/payment_methods/<int:parent_id>', methods=['GET'])
 @login_required

@@ -5,9 +5,15 @@
 {% block content %}
 <div class="container py-4">
     <div class="position-relative mb-4">
+        {% if current_user.is_superuser %}
+        <a href="{{ url_for('admin_home') }}" class="btn btn-link text-warning position-absolute start-0">
+            <i class="bi bi-arrow-left-circle-fill fs-3"></i>
+        </a>
+        {% else %}
         <a href="{{ url_for('user_home') }}" class="btn btn-link text-warning position-absolute start-0">
             <i class="bi bi-arrow-left-circle-fill fs-3"></i>
         </a>
+        {% endif %}
         <h1 class="text-center">Caixas - {{ unit.name }}</h1>
     </div>
     
@@ -20,11 +26,9 @@
                     <i class="bi bi-gear-fill"></i>
                 </button>
                 <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton">
-                    {% if current_user.is_superuser %}
-                    <li><a class="dropdown-item" href="{{ url_for('admin_monthly_base', unit_id=unit.id) }}">
+                    <li><a class="dropdown-item" href="{{ url_for('user_monthly_base', unit_id=unit.id) }}">
                         <i class="bi bi-calendar-month me-2"></i> Configurar Valor Base Mensal
                     </a></li>
-                    {% endif %}
                 </ul>
             </div>
             

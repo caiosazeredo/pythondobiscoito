@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Perfil - Casa do Biscoito{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h1 class="text-center mb-4">Editar Meu Perfil</h1>
+    
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <div class="text-center mb-4">
+                        <div class="bg-warning bg-opacity-25 rounded-circle p-4 mx-auto" style="width: 130px; height: 130px;">
+                            <i class="bi bi-person-circle text-warning" style="font-size: 80px;"></i>
+                        </div>
+                        <h3 class="mt-3">{{ current_user.name }}</h3>
+                        <span class="badge bg-light text-dark">{{ current_user.role }}</span>
+                    </div>
+                    
+                    <form method="post" action="{{ url_for('user_edit_profile') }}">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="name" class="form-label">Nome</label>
+                                <input type="text" class="form-control" id="name" name="name" value="{{ current_user.name }}" required>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label for="email" class="form-label">Email</label>
+                                <input type="email" class="form-control" id="email" name="email" value="{{ current_user.email }}" required>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label for="cpf" class="form-label">CPF</label>
+                                <input type="text" class="form-control" id="cpf" name="cpf" value="{{ current_user.cpf }}" data-mask="cpf">
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label for="phone" class="form-label">Telefone</label>
+                                <input type="text" class="form-control" id="phone" name="phone" value="{{ current_user.phone }}" data-mask="phone">
+                            </div>
+                            
+                            <div class="col-12">
+                                <h4 class="mt-4 mb-3">Alterar Senha</h4>
+                                <div class="alert alert-info">
+                                    <small>Preencha apenas se deseja alterar sua senha atual.</small>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label for="current_password" class="form-label">Senha Atual</label>
+                                <input type="password" class="form-control" id="current_password" name="current_password">
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label for="new_password" class="form-label">Nova Senha</label>
+                                <input type="password" class="form-control" id="new_password" name="new_password">
+                            </div>
+                            
+                            <div class="col-md-12">
+                                <label for="confirm_password" class="form-label">Confirmar Nova Senha</label>
+                                <input type="password" class="form-control" id="confirm_password" name="confirm_password">
+                            </div>
+                            
+                            <div class="col-12 mt-4">
+                                <div class="d-grid gap-2">
+                                    <button type="submit" class="btn btn-warning">
+                                        <i class="bi bi-save me-2"></i> Salvar Alterações
+                                    </button>
+                                    <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">Cancelar</a>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Máscaras para CPF e telefone
+        const cpfInput = document.getElementById('cpf');
+        const phoneInput = document.getElementById('phone');
+        
+        if (cpfInput) {
+            cpfInput.addEventListener('input', function() {
+                maskCPF(this);
+            });
+        }
+        
+        if (phoneInput) {
+            phoneInput.addEventListener('input', function() {
+                maskPhone(this);
+            });
+        }
+        
+        // Validação de senha
+        const newPasswordInput = document.getElementById('new_password');
+        const confirmPasswordInput = document.getElementById('confirm_password');
+        
+        if (confirmPasswordInput) {
+            confirmPasswordInput.addEventListener('input', function() {
+                if (newPasswordInput.value !== this.value) {
+                    this.setCustomValidity('As senhas não coincidem');
+                } else {
+                    this.setCustomValidity('');
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}
