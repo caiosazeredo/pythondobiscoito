@@ -7,7 +7,7 @@ import os
 import pymysql
 from reports import reports
 from pymysql.cursors import DictCursor
-from config import Config
+from configantiga import Config
 from flask_mail import Mail, Message
 from decimal import Decimal
 
@@ -1815,4 +1815,5 @@ def page_not_found(e):
 
 # Iniciar o aplicativo
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
