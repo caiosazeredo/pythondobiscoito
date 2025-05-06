@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'chave-secreta-padrao-mudar-em-producao'
+    SECRET_KEY = os.environ.get('SECRET_KEY')
     
     # Configuração do MySQL com as credenciais fornecidas
     MYSQL_HOST = os.environ.get('MYSQL_HOST')
