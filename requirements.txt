@@ -1,11 +1,5 @@
-# Core Flask
+# Flask e extensões básicas
 Flask==2.3.3
-Werkzeug==2.3.7
-Jinja2==3.1.6
-itsdangerous==2.2.0
-click==8.1.8
-
-# Extensões Flask
 Flask-SQLAlchemy==3.1.1
 Flask-Login==0.6.2
 Flask-WTF==1.2.1
@@ -13,12 +7,18 @@ Flask-Mail==0.9.1
 Flask-Cors==5.0.0
 bootstrap-flask==2.3.0
 
-# Banco de dados
-PyMySQL==1.1.0
+# Dependências de runtime
 python-dotenv==1.0.0
-
-# Segurança / Criptografia
+PyMySQL==1.1.0
 cryptography==41.0.3
 
 # WSGI server
 gunicorn==20.1.0
+
+# JSON Web Tokens
+PyJWT>=2.10.1
+
+# Fusos-horários
+tzdata==2024.1
+
+# (Remova todas as outras entradas não utilizadas, inclusive pywin32, python-jwt, pytz, kivy-deps.* etc.)
