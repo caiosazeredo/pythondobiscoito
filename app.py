@@ -1496,14 +1496,18 @@ def user_movements(unit_id, cashier_id):
         document_number = request.form.get('document_number', '')
         
         try:
-            # Inserir movimento
+            # MODIFICAÇÃO AQUI: Usar a data selecionada pelo usuário, mas com a hora atual
+            current_time = datetime.now().time()
+            movement_datetime = datetime.combine(date_obj_date, current_time)
+            
+            # Inserir movimento com a data selecionada
             cursor.execute(
                 "INSERT INTO movement "
                 "(cashier_id, type, amount, payment_method, description, payment_status, "
                 "coins_in, coins_out, client_name, document_number, created_at) "
                 "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (cashier_id, movement_type, amount, payment_method_id, description, 
-                 payment_status, coins_in, coins_out, client_name, document_number, datetime.now())
+                 payment_status, coins_in, coins_out, client_name, document_number, movement_datetime)
             )
             movement_id = cursor.lastrowid
             
@@ -1625,7 +1629,7 @@ def user_movements(unit_id, cashier_id):
         total_despesa=total_despesa,
         financial_balance=financial_balance,
         base_amount=base_amount,
-        cashier_base_amount=cashier_base_amount,  # Adicionando esta variável
+        cashier_base_amount=cashier_base_amount,
         devo_total=devo_total,
         t_total=t_total,
         z_total=z_total,
@@ -2105,6 +2109,20 @@ def batch_movements(unit_id, cashier_id):
         conn.close()
         return jsonify({'success': False, 'message': 'Caixa não encontrado ou não pertence a esta unidade!'})
     
+    # MODIFICAÇÃO AQUI: Obter a data selecionada da URL (referrer)
+    selected_date = datetime.now().date()
+    
+    # Obter URL de referência
+    referrer = request.referrer
+    if referrer and 'date=' in referrer:
+        # Extrair a data da URL
+        date_str = referrer.split('date=')[1].split('&')[0]
+        try:
+            selected_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except (ValueError, IndexError):
+            # Em caso de erro, manter a data atual
+            pass
+    
     # Obter número de entradas
     entry_count = int(request.form.get('entry_count', 0))
     
@@ -2125,12 +2143,16 @@ def batch_movements(unit_id, cashier_id):
             description = request.form.get(f'batch_description_{i}', '')
             
             if payment_method_id and amount > 0:
-                # Inserir movimentação
+                # Combinar a data selecionada com a hora atual
+                current_time = datetime.now().time()
+                movement_datetime = datetime.combine(selected_date, current_time)
+                
+                # Inserir movimentação usando a data selecionada
                 cursor.execute(
                     "INSERT INTO movement "
                     "(cashier_id, type, amount, payment_method, description, payment_status, created_at) "
                     "VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                    (cashier_id, 'entrada', amount, payment_method_id, description, 'realizado', datetime.now())
+                    (cashier_id, 'entrada', amount, payment_method_id, description, 'realizado', movement_datetime)
                 )
         
         conn.commit()
