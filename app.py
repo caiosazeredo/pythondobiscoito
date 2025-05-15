@@ -10,6 +10,9 @@ from pymysql.cursors import DictCursor
 from config import Config
 from flask_mail import Mail, Message
 from decimal import Decimal
+from datetime import datetime, timezone, timedelta
+
+
 
 # Inicialização do app
 app = Flask(__name__)
@@ -20,6 +23,13 @@ app.register_blueprint(reports)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+
+# Define o fuso horário brasileiro (UTC-3)
+BRAZIL_TIMEZONE = timezone(timedelta(hours=-3))
+
+# Função para obter o datetime atual no horário brasileiro
+def get_brazil_datetime():
+    return datetime.now(timezone.utc).astimezone(BRAZIL_TIMEZONE).replace(tzinfo=None)
 
 # Função para obter conexão com o banco
 def get_db_connection():
@@ -1279,7 +1289,6 @@ def user_cashiers(unit_id):
         financial_cashier_id=financial_cashier_id
     )
 
-# Modificar a rota de movimentos para incluir despesas da loja e estornos
 @app.route('/user/unit/<int:unit_id>/cashier/<int:cashier_id>/movements', methods=['GET', 'POST'])
 @login_required
 def user_movements(unit_id, cashier_id):
@@ -1332,9 +1341,9 @@ def user_movements(unit_id, cashier_id):
         try:
             date_obj = datetime.strptime(date_str, '%Y-%m-%d')
         except ValueError:
-            date_obj = datetime.now()
+            date_obj = get_brazil_datetime()  # Usando horário do Brasil
     else:
-        date_obj = datetime.now()
+        date_obj = get_brazil_datetime()  # Usando horário do Brasil
     
     # Formatar a data para uso no template
     date_formatted = date_obj.strftime('%Y-%m-%d')
@@ -1496,9 +1505,9 @@ def user_movements(unit_id, cashier_id):
         document_number = request.form.get('document_number', '')
         
         try:
-            # MODIFICAÇÃO AQUI: Usar a data selecionada pelo usuário, mas com a hora atual
-            current_time = datetime.now().time()
-            movement_datetime = datetime.combine(date_obj_date, current_time)
+            # MODIFICAÇÃO AQUI: Usar a data selecionada pelo usuário, mas com a hora atual do BRASIL
+            current_brazil_time = get_brazil_datetime().time()
+            movement_datetime = datetime.combine(date_obj_date, current_brazil_time)
             
             # Inserir movimento com a data selecionada
             cursor.execute(
@@ -1541,7 +1550,7 @@ def user_movements(unit_id, cashier_id):
                         new_total = coins_control['total_amount'] + Decimal(str(coins_in)) - Decimal(str(coins_out))
                         cursor.execute(
                             "UPDATE coins_control SET total_amount = %s, updated_at = %s WHERE id = %s",
-                            (new_total, datetime.now(), coins_control['id'])
+                            (new_total, get_brazil_datetime(), coins_control['id'])  # Usar horário do Brasil
                         )
                         
                         # Registrar no histórico se houver mudança
@@ -2109,8 +2118,8 @@ def batch_movements(unit_id, cashier_id):
         conn.close()
         return jsonify({'success': False, 'message': 'Caixa não encontrado ou não pertence a esta unidade!'})
     
-    # MODIFICAÇÃO AQUI: Obter a data selecionada da URL (referrer)
-    selected_date = datetime.now().date()
+    # MODIFICAÇÃO AQUI: Obter a data selecionada da URL (referrer) no horário do Brasil
+    selected_date = get_brazil_datetime().date()
     
     # Obter URL de referência
     referrer = request.referrer
@@ -2120,7 +2129,7 @@ def batch_movements(unit_id, cashier_id):
         try:
             selected_date = datetime.strptime(date_str, '%Y-%m-%d').date()
         except (ValueError, IndexError):
-            # Em caso de erro, manter a data atual
+            # Em caso de erro, manter a data atual do Brasil
             pass
     
     # Obter número de entradas
@@ -2143,9 +2152,9 @@ def batch_movements(unit_id, cashier_id):
             description = request.form.get(f'batch_description_{i}', '')
             
             if payment_method_id and amount > 0:
-                # Combinar a data selecionada com a hora atual
-                current_time = datetime.now().time()
-                movement_datetime = datetime.combine(selected_date, current_time)
+                # Combinar a data selecionada com a hora atual do Brasil
+                current_brazil_time = get_brazil_datetime().time()
+                movement_datetime = datetime.combine(selected_date, current_brazil_time)
                 
                 # Inserir movimentação usando a data selecionada
                 cursor.execute(
