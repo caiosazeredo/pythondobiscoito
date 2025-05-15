@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     let entryCount = 0;
     let lastPaymentMethod = null;
+    let lastPaymentDetail = null; // Adicionado: armazenar o último detalhamento selecionado
     
     // Função para adicionar uma nova linha de entrada
     function addBatchEntry() {
@@ -89,6 +90,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 loadPaymentDetails(this.value, paymentDetailSelect);
             } else {
                 paymentDetailSelect.innerHTML = '<option value="">Selecione o tipo primeiro</option>';
+                lastPaymentDetail = null; // Resetar o último detalhamento se o método principal for resetado
+            }
+        });
+        
+        // Adicionar listener para salvar o último detalhamento selecionado
+        paymentDetailSelect.addEventListener('change', function() {
+            if (this.value) {
+                lastPaymentDetail = this.value;
             }
         });
         
@@ -140,6 +149,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     option.textContent = mainSelect.options[mainSelect.selectedIndex].textContent;
                     
                     selectElement.appendChild(option);
+                    
+                    // Se estiver usando o mesmo método de pagamento, selecionar automaticamente esse detalhamento
+                    if (lastPaymentMethod === parentId) {
+                        lastPaymentDetail = parentId;
+                        option.selected = true;
+                    }
                 } else {
                     // Adiciona opção padrão
                     const defaultOption = document.createElement('option');
@@ -148,13 +163,30 @@ document.addEventListener('DOMContentLoaded', function() {
                     selectElement.appendChild(defaultOption);
                     
                     // Adiciona subcategorias
+                    let foundLastDetail = false;
                     data.forEach(method => {
                         const option = document.createElement('option');
                         option.value = method.id;
                         option.textContent = method.name;
+                        
+                        // Se este for o último detalhamento usado, selecioná-lo
+                        if (lastPaymentDetail && method.id.toString() === lastPaymentDetail.toString()) {
+                            option.selected = true;
+                            foundLastDetail = true;
+                        }
+                        
                         selectElement.appendChild(option);
                     });
+                    
+                    // Se não encontrou o último detalhamento nos dados, selecionar o primeiro
+                    if (lastPaymentDetail && !foundLastDetail && data.length > 0) {
+                        selectElement.options[1].selected = true;
+                        lastPaymentDetail = selectElement.options[1].value;
+                    }
                 }
+                
+                // Disparar o evento change para atualizar quaisquer dependências
+                selectElement.dispatchEvent(new Event('change'));
             })
             .catch(error => console.error('Erro ao carregar formas de pagamento:', error));
     }
