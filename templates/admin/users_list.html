@@ -88,8 +88,8 @@
                 const phone = card.dataset.phone;
                 const cpf = card.dataset.cpf;
                 const role = card.dataset.role;
-                const isSuperUser = card.dataset.superuser === 'True';
-                const isActive = card.dataset.active === 'True';
+                const isSuperUser = card.dataset.superuser.toLowerCase() === 'true';
+                const isActive = card.dataset.active.toLowerCase() === 'true';
                 
                 const matchesSearch = (
                     name.includes(searchTerm) || 
