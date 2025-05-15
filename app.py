@@ -522,7 +522,7 @@ def admin_create_user():
             # Corrigindo o nome da tabela para "user" e removendo o campo created_at
             cursor.execute(
                 "INSERT INTO user (name, email, password_hash, cpf, phone, role, is_superuser, is_active, last_login) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                (name, email, password_hash, cpf, phone, role, is_superuser, 1, datetime.now())
+                (name, email, password_hash, cpf, phone, role, is_superuser, 1, get_brazil_datetime())
             )
             user_id = cursor.lastrowid
             
@@ -572,7 +572,7 @@ def reset_password_request():
             # Gerar um token único para redefinição
             import secrets
             token = secrets.token_hex(16)
-            expires = datetime.now() + timedelta(hours=24)
+            expires = get_brazil_datetime() + timedelta(hours=24)
             
             # Salvar o token no banco
             cursor.execute(
@@ -621,7 +621,7 @@ def reset_password(token):
     )
     reset_data = cursor.fetchone()
     
-    if not reset_data or reset_data['expires'] < datetime.now():
+    if not reset_data or reset_data['expires'] < get_brazil_datetime():
         cursor.close()
         conn.close()
         flash('O link de redefinição de senha é inválido ou expirou.', 'error')
@@ -789,7 +789,7 @@ def admin_monthly_base(unit_id):
         flash('Unidade não encontrada!', 'error')
         return redirect(url_for('admin_units_list'))
     
-    today = datetime.now()
+    today = get_brazil_datetime()
     current_month = today.month
     current_year = today.year
     
@@ -1046,7 +1046,7 @@ def user_coins_control(unit_id):
             
             cursor.execute(
                 "UPDATE coins_control SET total_amount = %s, updated_at = %s WHERE id = %s",
-                (new_total, datetime.now(), coins_control['id'])
+                (new_total, get_brazil_datetime(), coins_control['id'])
             )
             
             cursor.execute(
@@ -1060,7 +1060,7 @@ def user_coins_control(unit_id):
         elif action == 'deposit':
             cursor.execute(
                 "UPDATE coins_control SET total_amount = 0, last_deposit_date = %s, updated_at = %s WHERE id = %s",
-                (datetime.now(), datetime.now(), coins_control['id'])
+                (get_brazil_datetime(), get_brazil_datetime(), coins_control['id'])
             )
             
             cursor.execute(
@@ -1191,7 +1191,7 @@ def user_cashiers(unit_id):
     cashiers = cursor.fetchall()
     
     # Obter valor base mensal da unidade para o mês atual
-    today = datetime.now()
+    today = get_brazil_datetime()
     cursor.execute(
         "SELECT * FROM monthly_base_amount WHERE unit_id = %s AND month = %s AND year = %s",
         (unit_id, today.month, today.year)
@@ -1773,7 +1773,7 @@ def user_monthly_base(unit_id):
             flash('Acesso não autorizado a esta unidade!', 'error')
             return redirect(url_for('user_home'))
     
-    today = datetime.now()
+    today = get_brazil_datetime()
     current_month = today.month
     current_year = today.year
     
@@ -1872,7 +1872,7 @@ def user_distribute_base(unit_id):
             flash('Acesso não autorizado a esta unidade!', 'error')
             return redirect(url_for('user_home'))
     
-    today = datetime.now()
+    today = get_brazil_datetime()
     current_month = today.month
     current_year = today.year
     
