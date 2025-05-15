@@ -230,45 +230,78 @@
                                 </div>
                             </div>
                             
-                            <!-- Card de PDV (Campos Z, T, devo) -->
+                            <!-- Card de PDV (Campos Z, T, devo) - PARTE MODIFICADA -->
                             <div class="card shadow-sm bg-light mb-4">
                                 <div class="card-body">
-                                    <h5 class="card-title mb-3">Dados do PDV</h5>
+                                    <h5 class="card-title mb-3">Conferência de Caixa (PDV)</h5>
                                     
                                     <form method="post" class="mb-3">
                                         <div class="mb-3">
-                                            <label for="z_value" class="form-label">Valor Z (PDV)</label>
+                                            <label for="z_value" class="form-label">Valor Z (Fechamento PDV)</label>
                                             <div class="input-group">
                                                 <span class="input-group-text">R$</span>
                                                 <input type="number" name="z_value" id="z_value" class="form-control" step="0.01" value="{{ z_total }}">
                                                 <button type="submit" class="btn btn-sm btn-warning">Atualizar</button>
                                             </div>
-                                            <small class="form-text text-muted">Total das vendas reportado pelo PDV</small>
+                                            <small class="form-text text-muted">Valor declarado no recibo Z (fechamento do caixa na registradora)</small>
                                         </div>
                                     </form>
                                     
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span>Vendas (T):</span>
-                                        <span class="fw-bold text-success">R$ {{ "%.2f"|format(t_total) }}</span>
+                                    <div class="alert alert-light border mb-3">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <h6 class="mb-2">Valores Registrados</h6>
+                                                <div class="d-flex justify-content-between mb-2">
+                                                    <span>Vendas Registradas:</span>
+                                                    <span class="fw-bold text-success">R$ {{ "%.2f"|format(t_total + devo_total) }}</span>
+                                                </div>
+                                                <div class="d-flex justify-content-between mb-2">
+                                                    <span>Cancelamentos (devo):</span>
+                                                    <span class="fw-bold text-danger">- R$ {{ "%.2f"|format(devo_total) }}</span>
+                                                </div>
+                                                <div class="d-flex justify-content-between fw-bold">
+                                                    <span>Total Real Apurado (T):</span>
+                                                    <span class="text-success">R$ {{ "%.2f"|format(t_total) }}</span>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="col-md-6">
+                                                <h6 class="mb-2">Conferência</h6>
+                                                <div class="d-flex justify-content-between mb-2">
+                                                    <span>Total Real Apurado (T):</span>
+                                                    <span class="fw-bold">R$ {{ "%.2f"|format(t_total) }}</span>
+                                                </div>
+                                                <div class="d-flex justify-content-between mb-2">
+                                                    <span>Valor Recibo Z:</span>
+                                                    <span class="fw-bold">R$ {{ "%.2f"|format(z_total) }}</span>
+                                                </div>
+                                                <div class="d-flex justify-content-between fw-bold border-top pt-2 mt-2">
+                                                    <span>Diferença (T-Z):</span>
+                                                    <span class="{{ 'text-success' if dif_total == 0 else 'text-danger' }}">
+                                                        R$ {{ "%.2f"|format(dif_total) }}
+                                                        {% if dif_total == 0 %}
+                                                        <i class="bi bi-check-circle-fill text-success ms-1"></i>
+                                                        {% else %}
+                                                        <i class="bi bi-exclamation-triangle-fill text-danger ms-1"></i>
+                                                        {% endif %}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                     
                                     <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span>Cancelamentos (devo):</span>
-                                        <span class="fw-bold text-danger">R$ {{ "%.2f"|format(devo_total) }}</span>
-                                    </div>
-                                    
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span>Diferença (T-Z):</span>
-                                        <span class="fw-bold {{ 'text-success' if dif_total >= 0 else 'text-danger' }}">
-                                            R$ {{ "%.2f"|format(dif_total) }}
+                                        <span class="small text-muted">
+                                            <i class="bi bi-info-circle me-1"></i> 
+                                            Se a diferença for zero, o caixa bateu corretamente. Se for diferente de zero, verifique as transações.
                                         </span>
+                                        <button type="button" class="btn btn-outline-warning btn-sm" data-bs-toggle="modal" data-bs-target="#devoModal">
+                                            <i class="bi bi-plus-circle me-1"></i> Registrar Cancelamento
+                                        </button>
                                     </div>
-                                    
-                                    <button type="button" class="btn btn-outline-warning btn-sm mt-2" data-bs-toggle="modal" data-bs-target="#devoModal">
-                                        <i class="bi bi-plus-circle me-1"></i> Registrar Cancelamento
-                                    </button>
                                 </div>
                             </div>
+                            <!-- FIM DA PARTE MODIFICADA -->
                             
                             <!-- Card do Pote (apenas para Caixa Financeiro) -->
                             {% if is_financial_cashier %}
