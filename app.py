@@ -27,6 +27,22 @@ login_manager.login_view = 'login'
 # Define o fuso horário brasileiro (UTC-3)
 BRAZIL_TIMEZONE = timezone(timedelta(hours=-3))
 
+MESES = {
+    1: 'Janeiro',
+    2: 'Fevereiro',
+    3: 'Março',
+    4: 'Abril',
+    5: 'Maio',
+    6: 'Junho',
+    7: 'Julho',
+    8: 'Agosto',
+    9: 'Setembro',
+    10: 'Outubro',
+    11: 'Novembro',
+    12: 'Dezembro'
+}
+
+
 # Função para obter o datetime atual no horário brasileiro
 def get_brazil_datetime():
     return datetime.now(timezone.utc).astimezone(BRAZIL_TIMEZONE).replace(tzinfo=None)
@@ -836,9 +852,10 @@ def admin_monthly_base(unit_id):
         monthly_base=monthly_base,
         current_month=current_month,
         current_year=current_year,
-        month_name=calendar.month_name[current_month],
+        month_name=MESES[current_month],  # Usando MESES em vez de calendar.month_name
         base_history=base_history,
-        calendar=calendar
+        calendar=calendar,
+        meses=MESES  # Passar o dicionário inteiro para o template
     )
 
 # Rotas para Unidades (Admin)
@@ -1833,10 +1850,11 @@ def user_monthly_base(unit_id):
         monthly_base=monthly_base,
         current_month=current_month,
         current_year=current_year,
-        month_name=calendar.month_name[current_month],
+        month_name=MESES[current_month],  # Usando MESES em vez de calendar.month_name
         base_history=base_history,
         calendar=calendar,
-        previous_month_amount=previous_month_amount
+        previous_month_amount=previous_month_amount,
+        meses=MESES  # Passar o dicionário inteiro para o template
     )
 
 @app.route('/user/unit/<int:unit_id>/distribute_base', methods=['GET', 'POST'])

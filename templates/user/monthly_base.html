@@ -59,7 +59,7 @@
                             <tbody>
                                 {% for item in base_history %}
                                 <tr>
-                                    <td>{{ calendar.month_name[item.month] }}/{{ item.year }}</td>
+                                    <td>{{ meses[item.month] }}/{{ item.year }}</td>
                                     <td class="text-end fw-bold">R$ {{ "%.2f"|format(item.amount) }}</td>
                                 </tr>
                                 {% else %}

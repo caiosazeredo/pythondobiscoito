@@ -220,17 +220,18 @@
                         </div>
                         
                         <div class="col-md-4">
+                            <!-- Card de Valor Base - Mais responsivo -->
                             <div class="card shadow-sm bg-light mb-4">
                                 <div class="card-body">
                                     <h5 class="card-title mb-3">Valor Base</h5>
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span>Valor Base Caixa {{ cashier.number }}:</span>
+                                    <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap">
+                                        <span class="me-2">Valor Base Caixa {{ cashier.number }}:</span>
                                         <span class="fw-bold">R$ {{ "%.2f"|format(cashier_base_amount) }}</span>
                                     </div>
                                 </div>
                             </div>
                             
-                            <!-- Card de PDV (Campos Z, T, devo) - PARTE MODIFICADA -->
+                            <!-- Card de PDV (Campos Z, T, devo) - Layout melhorado para responsividade -->
                             <div class="card shadow-sm bg-light mb-4">
                                 <div class="card-body">
                                     <h5 class="card-title mb-3">Conferência de Caixa (PDV)</h5>
@@ -243,40 +244,43 @@
                                                 <input type="number" name="z_value" id="z_value" class="form-control" step="0.01" value="{{ z_total }}">
                                                 <button type="submit" class="btn btn-sm btn-warning">Atualizar</button>
                                             </div>
-                                            <small class="form-text text-muted">Valor declarado no recibo Z (fechamento do caixa na registradora)</small>
+                                            <small class="form-text text-muted">Valor declarado no recibo Z (fechamento do caixa)</small>
                                         </div>
                                     </form>
                                     
-                                    <div class="alert alert-light border mb-3">
-                                        <div class="row">
-                                            <div class="col-md-6">
-                                                <h6 class="mb-2">Valores Registrados</h6>
-                                                <div class="d-flex justify-content-between mb-2">
-                                                    <span>Vendas Registradas:</span>
+                                    <div class="alert alert-light border mb-3 p-2 p-md-3">
+                                        <!-- Layout mais adaptável em 2 colunas -->
+                                        <div class="row g-2">
+                                            <!-- Coluna 1 - Sempre ocupa toda largura em xs e sm, metade em md+ -->
+                                            <div class="col-12 col-md-6">
+                                                <h6 class="mb-2 fs-6">Valores Registrados</h6>
+                                                <div class="d-flex justify-content-between mb-2 flex-wrap">
+                                                    <span class="me-2">Vendas Registradas:</span>
                                                     <span class="fw-bold text-success">R$ {{ "%.2f"|format(t_total + devo_total) }}</span>
                                                 </div>
-                                                <div class="d-flex justify-content-between mb-2">
-                                                    <span>Cancelamentos (devo):</span>
+                                                <div class="d-flex justify-content-between mb-2 flex-wrap">
+                                                    <span class="me-2">Cancelamentos:</span>
                                                     <span class="fw-bold text-danger">- R$ {{ "%.2f"|format(devo_total) }}</span>
                                                 </div>
-                                                <div class="d-flex justify-content-between fw-bold">
-                                                    <span>Total Real Apurado (T):</span>
+                                                <div class="d-flex justify-content-between fw-bold flex-wrap border-top pt-2 mt-1">
+                                                    <span class="me-2">Total Real Apurado (T):</span>
                                                     <span class="text-success">R$ {{ "%.2f"|format(t_total) }}</span>
                                                 </div>
                                             </div>
                                             
-                                            <div class="col-md-6">
-                                                <h6 class="mb-2">Conferência</h6>
-                                                <div class="d-flex justify-content-between mb-2">
-                                                    <span>Total Real Apurado (T):</span>
+                                            <!-- Coluna 2 - Sempre ocupa toda largura em xs e sm, metade em md+ -->
+                                            <div class="col-12 col-md-6 mt-3 mt-md-0">
+                                                <h6 class="mb-2 fs-6">Conferência</h6>
+                                                <div class="d-flex justify-content-between mb-2 flex-wrap">
+                                                    <span class="me-2">Total Real (T):</span>
                                                     <span class="fw-bold">R$ {{ "%.2f"|format(t_total) }}</span>
                                                 </div>
-                                                <div class="d-flex justify-content-between mb-2">
-                                                    <span>Valor Recibo Z:</span>
+                                                <div class="d-flex justify-content-between mb-2 flex-wrap">
+                                                    <span class="me-2">Valor Recibo Z:</span>
                                                     <span class="fw-bold">R$ {{ "%.2f"|format(z_total) }}</span>
                                                 </div>
-                                                <div class="d-flex justify-content-between fw-bold border-top pt-2 mt-2">
-                                                    <span>Diferença (T-Z):</span>
+                                                <div class="d-flex justify-content-between fw-bold border-top pt-2 mt-1 flex-wrap">
+                                                    <span class="me-2">Diferença (T-Z):</span>
                                                     <span class="{{ 'text-success' if dif_total == 0 else 'text-danger' }}">
                                                         R$ {{ "%.2f"|format(dif_total) }}
                                                         {% if dif_total == 0 %}
@@ -290,10 +294,11 @@
                                         </div>
                                     </div>
                                     
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span class="small text-muted">
+                                    <!-- Área de mensagem e botão - layout mais responsivo -->
+                                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center">
+                                        <span class="small text-muted mb-2 mb-md-0">
                                             <i class="bi bi-info-circle me-1"></i> 
-                                            Se a diferença for zero, o caixa bateu corretamente. Se for diferente de zero, verifique as transações.
+                                            Se a diferença for zero, o caixa bateu corretamente.
                                         </span>
                                         <button type="button" class="btn btn-outline-warning btn-sm" data-bs-toggle="modal" data-bs-target="#devoModal">
                                             <i class="bi bi-plus-circle me-1"></i> Registrar Cancelamento
@@ -301,9 +306,8 @@
                                     </div>
                                 </div>
                             </div>
-                            <!-- FIM DA PARTE MODIFICADA -->
                             
-                            <!-- Card do Pote (apenas para Caixa Financeiro) -->
+                            <!-- Card do Pote (apenas para Caixa Financeiro) - Layout responsivo -->
                             {% if is_financial_cashier %}
                             <div class="card shadow-sm bg-light mb-4">
                                 <div class="card-body">
@@ -324,6 +328,7 @@
                             </div>
                             {% endif %}
                         
+                            <!-- Card de Resumo do Dia - Layout responsivo -->
                             <div class="card shadow-sm bg-light">
                                 <div class="card-body">
                                     <h5 class="card-title mb-3">Resumo do Dia</h5>
@@ -332,8 +337,8 @@
                                     
                                     {% if payment_category_totals %}
                                         {% for category, total in payment_category_totals.items() %}
-                                            <div class="d-flex justify-content-between align-items-center small mb-1">
-                                                <span>{{ category|capitalize }}:</span>
+                                            <div class="d-flex justify-content-between align-items-center small mb-1 flex-wrap">
+                                                <span class="me-2">{{ category|capitalize }}:</span>
                                                 <span class="{{ 'text-success' if total > 0 else '' }}">
                                                     R$ {{ "%.2f"|format(total) }}
                                                 </span>
@@ -345,25 +350,25 @@
                                     
                                     <hr>
                                     
-                                    <div class="d-flex justify-content-between align-items-center fw-bold">
-                                        <span>Total Entradas:</span>
+                                    <div class="d-flex justify-content-between align-items-center fw-bold flex-wrap">
+                                        <span class="me-2">Total Entradas:</span>
                                         <span class="text-success">R$ {{ "%.2f"|format(total_entrada) }}</span>
                                     </div>
                                     
-                                    <div class="d-flex justify-content-between align-items-center fw-bold">
-                                        <span>Total Estornos:</span>
+                                    <div class="d-flex justify-content-between align-items-center fw-bold flex-wrap">
+                                        <span class="me-2">Total Estornos:</span>
                                         <span class="text-danger">R$ {{ "%.2f"|format(total_estorno) }}</span>
                                     </div>
                                     
-                                    <div class="d-flex justify-content-between align-items-center fw-bold">
-                                        <span>Total Despesas:</span>
+                                    <div class="d-flex justify-content-between align-items-center fw-bold flex-wrap">
+                                        <span class="me-2">Total Despesas:</span>
                                         <span class="text-danger">R$ {{ "%.2f"|format(total_despesa) }}</span>
                                     </div>
                                     
                                     <hr>
                                     
-                                    <div class="d-flex justify-content-between align-items-center fw-bold">
-                                        <span>Saldo do Dia:</span>
+                                    <div class="d-flex justify-content-between align-items-center fw-bold flex-wrap">
+                                        <span class="me-2">Saldo do Dia:</span>
                                         <span class="{{ 'text-success' if total_entrada - total_estorno - total_despesa >= 0 else 'text-danger' }}">
                                             R$ {{ "%.2f"|format(total_entrada - total_estorno - total_despesa) }}
                                         </span>
@@ -371,8 +376,8 @@
                                     
                                     <hr>
                                     
-                                    <div class="d-flex justify-content-between align-items-center fw-bold">
-                                        <span>Saldo do Caixa Financeiro:</span>
+                                    <div class="d-flex justify-content-between align-items-center fw-bold flex-wrap">
+                                        <span class="me-2">Saldo do Caixa:</span>
                                         <span class="{{ 'text-success' if financial_balance >= 0 else 'text-danger' }}">
                                             R$ {{ "%.2f"|format(financial_balance + base_amount) }}
                                         </span>
