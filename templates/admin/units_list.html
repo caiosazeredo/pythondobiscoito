@@ -33,7 +33,7 @@
              data-name="{{ unit.name|lower }}" 
              data-address="{{ unit.address|lower }}" 
              data-phone="{{ unit.phone|lower }}" 
-             data-active="{{ unit.is_active }}">
+             data-active="{{ 'true' if unit.is_active else 'false' }}">
             <div class="card h-100 shadow-sm">
                 <div class="card-body p-4">
                     <div class="d-flex align-items-center mb-3">
@@ -71,7 +71,7 @@
                 const name = card.dataset.name;
                 const address = card.dataset.address;
                 const phone = card.dataset.phone;
-                const isActive = card.dataset.active === 'True';
+                const isActive = card.dataset.active.toLowerCase() === 'true';
                 
                 const matchesSearch = (
                     name.includes(searchTerm) || 
@@ -91,6 +91,9 @@
         
         searchInput.addEventListener('input', filterCards);
         filterActive.addEventListener('change', filterCards);
+        
+        // Aplicar o filtro inicialmente
+        filterCards();
     });
 </script>
 {% endblock %}
