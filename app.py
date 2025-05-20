@@ -1518,11 +1518,11 @@ def user_movements(unit_id, cashier_id):
         # Valores padrão para campos específicos
         coins_in = float(request.form.get('coins_in') or 0)
         coins_out = float(request.form.get('coins_out') or 0)
-        client_name = request.form.get('client_name', '')
-        document_number = request.form.get('document_number', '')
+        
+        # Removidos os campos client_name e document_number conforme solicitado
         
         try:
-            # MODIFICAÇÃO AQUI: Usar a data selecionada pelo usuário, mas com a hora atual do BRASIL
+            # CORREÇÃO: Usar a data selecionada pelo usuário mantendo a hora atual (sem substituir a data)
             current_brazil_time = get_brazil_datetime().time()
             movement_datetime = datetime.combine(date_obj_date, current_brazil_time)
             
@@ -1530,10 +1530,10 @@ def user_movements(unit_id, cashier_id):
             cursor.execute(
                 "INSERT INTO movement "
                 "(cashier_id, type, amount, payment_method, description, payment_status, "
-                "coins_in, coins_out, client_name, document_number, created_at) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                "coins_in, coins_out, created_at) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (cashier_id, movement_type, amount, payment_method_id, description, 
-                 payment_status, coins_in, coins_out, client_name, document_number, movement_datetime)
+                 payment_status, coins_in, coins_out, movement_datetime)
             )
             movement_id = cursor.lastrowid
             
@@ -1567,7 +1567,7 @@ def user_movements(unit_id, cashier_id):
                         new_total = coins_control['total_amount'] + Decimal(str(coins_in)) - Decimal(str(coins_out))
                         cursor.execute(
                             "UPDATE coins_control SET total_amount = %s, updated_at = %s WHERE id = %s",
-                            (new_total, get_brazil_datetime(), coins_control['id'])  # Usar horário do Brasil
+                            (new_total, get_brazil_datetime(), coins_control['id'])
                         )
                         
                         # Registrar no histórico se houver mudança
@@ -2136,7 +2136,7 @@ def batch_movements(unit_id, cashier_id):
         conn.close()
         return jsonify({'success': False, 'message': 'Caixa não encontrado ou não pertence a esta unidade!'})
     
-    # MODIFICAÇÃO AQUI: Obter a data selecionada da URL (referrer) no horário do Brasil
+    # CORREÇÃO: Obter a data selecionada da URL (referrer)
     selected_date = get_brazil_datetime().date()
     
     # Obter URL de referência
@@ -2170,7 +2170,7 @@ def batch_movements(unit_id, cashier_id):
             description = request.form.get(f'batch_description_{i}', '')
             
             if payment_method_id and amount > 0:
-                # Combinar a data selecionada com a hora atual do Brasil
+                # CORREÇÃO: Combinar a data selecionada com a hora atual 
                 current_brazil_time = get_brazil_datetime().time()
                 movement_datetime = datetime.combine(selected_date, current_brazil_time)
                 
