@@ -1,3 +1,4 @@
+<!-- templates/admin/home.html (modificado) -->
 {% extends "base.html" %}
 
 {% block title %}Administrador - Casa do Biscoito{% endblock %}
@@ -51,18 +52,6 @@
                     </div>
                     <h5 class="card-title">Listar Unidades</h5>
                     <a href="{{ url_for('admin_units_list') }}" class="stretched-link"></a>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col">
-            <div class="card shadow-sm h-100">
-                <div class="card-body text-center p-4">
-                    <div class="mb-3 text-warning">
-                        <i class="bi bi-file-earmark-text" style="font-size: 64px;"></i>
-                    </div>
-                    <h5 class="card-title">Página do Funcionário</h5>
-                    <a href="{{ url_for('user_home') }}" class="stretched-link"></a>
                 </div>
             </div>
         </div>

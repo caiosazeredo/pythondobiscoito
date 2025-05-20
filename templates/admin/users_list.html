@@ -10,61 +10,177 @@
                 <i class="bi bi-arrow-left"></i>
             </a>
         </div>
-        <h2 class="text-center mb-0">Lista de Funcionários</h2>
-        <div></div>
-    </div>
-    
-    <div class="mb-4">
-        <div class="row justify-content-center mb-3">
-            <div class="col-md-4">
-                <input type="text" id="searchInput" class="form-control" placeholder="Buscar funcionário...">
-            </div>
-        </div>
-        
-        <div class="d-flex justify-content-center mb-3">
-            <div class="form-check form-switch me-4">
-                <input class="form-check-input" type="checkbox" id="filterSuperUser">
-                <label class="form-check-label" for="filterSuperUser">Exibir apenas super usuários</label>
-            </div>
-            
-            <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" id="filterActiveUser" checked>
-                <label class="form-check-label" for="filterActiveUser">Exibir apenas usuários ativos</label>
-            </div>
+        <h2 class="text-center mb-0">Usuários do Sistema</h2>
+        <div>
+            <a href="{{ url_for('admin_create_user') }}" class="btn btn-warning">
+                <i class="bi bi-person-plus-fill me-1"></i> Novo Usuário
+            </a>
         </div>
     </div>
     
-    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-4">
-        {% for user in users %}
-        <div class="col employee-card" 
-             data-name="{{ user.name|lower }}" 
-             data-email="{{ user.email|lower }}" 
-             data-phone="{{ user.phone|lower }}" 
-             data-cpf="{{ user.cpf|lower }}" 
-             data-role="{{ user.role|lower }}"
-             data-superuser="{{ user.is_superuser }}"
-             data-active="{{ user.is_active }}">
-            <div class="card h-100 shadow-sm employee-card">
-                <div class="card-body p-4">
-                    <div class="d-flex flex-column align-items-center mb-3">
-                        <div class="bg-warning bg-opacity-25 rounded-circle p-2 mb-2">
-                            <i class="bi bi-person-circle text-warning" style="font-size: 50px;"></i>
-                        </div>
-                        <h3 class="fs-5">{{ user.name }}</h3>
-                    </div>
-                    
-                    <p><strong>CPF:</strong> {{ user.cpf or "Não informado" }}</p>
-                    <p><strong>E-mail:</strong> {{ user.email or "Não informado" }}</p>
-                    <p><strong>Telefone:</strong> {{ user.phone or "Não informado" }}</p>
-                    <p><strong>Função:</strong> {{ user.role or "Não informado" }}</p>
-                    <p><strong>Superusuário:</strong> {{ "Sim" if user.is_superuser else "Não" }}</p>
-                    <p><strong>Ativo:</strong> {{ "Sim" if user.is_active else "Não" }}</p>
-                    
-                    <a href="{{ url_for('admin_edit_user', user_id=user.id) }}" class="stretched-link"></a>
-                </div>
+    <div class="row justify-content-center mb-4">
+        <div class="col-md-4">
+            <input type="text" id="searchInput" class="form-control" placeholder="Buscar por nome, email, telefone...">
+        </div>
+    </div>
+    
+    <!-- Seção de Administradores -->
+    <div class="card shadow-sm mb-5">
+        <div class="card-header bg-primary text-white py-3">
+            <h4 class="mb-0"><i class="bi bi-shield-lock me-2"></i> Administradores</h4>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Nome</th>
+                            <th>Email</th>
+                            <th>CPF</th>
+                            <th>Telefone</th>
+                            <th>Função</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% set admin_count = 0 %}
+                        {% for user in users %}
+                            {% if user.is_superuser %}
+                                {% set admin_count = admin_count + 1 %}
+                                <tr class="user-row" 
+                                    data-name="{{ user.name|lower }}" 
+                                    data-email="{{ user.email|lower }}" 
+                                    data-phone="{{ user.phone|lower }}" 
+                                    data-cpf="{{ user.cpf|lower }}" 
+                                    data-role="{{ user.role|lower }}">
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="bg-primary bg-opacity-10 rounded-circle p-2 me-2">
+                                                <i class="bi bi-person-fill text-primary"></i>
+                                            </div>
+                                            <div>
+                                                <span class="fw-medium">{{ user.name }}</span>
+                                                {% if user.id == current_user.id %}
+                                                <span class="badge bg-info ms-1">Você</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>{{ user.email }}</td>
+                                    <td>{{ user.cpf or "—" }}</td>
+                                    <td>{{ user.phone or "—" }}</td>
+                                    <td>{{ user.role or "—" }}</td>
+                                    <td>
+                                        {% if user.is_active %}
+                                        <span class="badge bg-success">Ativo</span>
+                                        {% else %}
+                                        <span class="badge bg-danger">Inativo</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="d-flex gap-1">
+                                            <a href="{{ url_for('admin_edit_user', user_id=user.id) }}" class="btn btn-sm btn-outline-primary">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                            {% if user.id != current_user.id %}
+                                            <form method="post" action="{{ url_for('admin_delete_user', user_id=user.id) }}" class="d-inline" onsubmit="return confirm('Tem certeza que deseja excluir este administrador?');">
+                                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </form>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if admin_count == 0 %}
+                        <tr>
+                            <td colspan="7" class="text-center py-3">Nenhum administrador cadastrado.</td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
             </div>
         </div>
-        {% endfor %}
+    </div>
+    
+    <!-- Seção de Funcionários -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-warning text-dark py-3">
+            <h4 class="mb-0"><i class="bi bi-people-fill me-2"></i> Funcionários</h4>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Nome</th>
+                            <th>Email</th>
+                            <th>CPF</th>
+                            <th>Telefone</th>
+                            <th>Função</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% set staff_count = 0 %}
+                        {% for user in users %}
+                            {% if not user.is_superuser %}
+                                {% set staff_count = staff_count + 1 %}
+                                <tr class="user-row" 
+                                    data-name="{{ user.name|lower }}" 
+                                    data-email="{{ user.email|lower }}" 
+                                    data-phone="{{ user.phone|lower }}" 
+                                    data-cpf="{{ user.cpf|lower }}" 
+                                    data-role="{{ user.role|lower }}">
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="bg-warning bg-opacity-10 rounded-circle p-2 me-2">
+                                                <i class="bi bi-person-fill text-warning"></i>
+                                            </div>
+                                            <span class="fw-medium">{{ user.name }}</span>
+                                        </div>
+                                    </td>
+                                    <td>{{ user.email }}</td>
+                                    <td>{{ user.cpf or "—" }}</td>
+                                    <td>{{ user.phone or "—" }}</td>
+                                    <td>{{ user.role or "—" }}</td>
+                                    <td>
+                                        {% if user.is_active %}
+                                        <span class="badge bg-success">Ativo</span>
+                                        {% else %}
+                                        <span class="badge bg-danger">Inativo</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="d-flex gap-1">
+                                            <a href="{{ url_for('admin_edit_user', user_id=user.id) }}" class="btn btn-sm btn-outline-warning">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                            <form method="post" action="{{ url_for('admin_delete_user', user_id=user.id) }}" class="d-inline" onsubmit="return confirm('Tem certeza que deseja excluir este funcionário?');">
+                                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if staff_count == 0 %}
+                        <tr>
+                            <td colspan="7" class="text-center py-3">Nenhum funcionário cadastrado.</td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
@@ -72,47 +188,40 @@
 {% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Função simples de pesquisa
         const searchInput = document.getElementById('searchInput');
-        const filterSuperUser = document.getElementById('filterSuperUser');
-        const filterActiveUser = document.getElementById('filterActiveUser');
-        const employeeCards = document.querySelectorAll('.employee-card');
+        const userRows = document.querySelectorAll('.user-row');
         
-        function filterCards() {
-            const searchTerm = searchInput.value.toLowerCase();
-            const showOnlySuperUsers = filterSuperUser.checked;
-            const showOnlyActiveUsers = filterActiveUser.checked;
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase().trim();
             
-            employeeCards.forEach(card => {
-                const name = card.dataset.name;
-                const email = card.dataset.email;
-                const phone = card.dataset.phone;
-                const cpf = card.dataset.cpf;
-                const role = card.dataset.role;
-                const isSuperUser = card.dataset.superuser.toLowerCase() === 'true';
-                const isActive = card.dataset.active.toLowerCase() === 'true';
+            if (searchTerm === '') {
+                // Se o campo estiver vazio, mostrar todas as linhas
+                userRows.forEach(row => {
+                    row.style.display = '';
+                });
+                return;
+            }
+            
+            userRows.forEach(row => {
+                const name = row.dataset.name || '';
+                const email = row.dataset.email || '';
+                const phone = row.dataset.phone || '';
+                const cpf = row.dataset.cpf || '';
+                const role = row.dataset.role || '';
                 
-                const matchesSearch = (
-                    name.includes(searchTerm) || 
+                // Verificar se algum campo contém o termo de pesquisa
+                if (name.includes(searchTerm) || 
                     email.includes(searchTerm) || 
                     phone.includes(searchTerm) || 
                     cpf.includes(searchTerm) || 
-                    role.includes(searchTerm)
-                );
-                
-                const matchesSuperUser = !showOnlySuperUsers || isSuperUser;
-                const matchesActive = !showOnlyActiveUsers || isActive;
-                
-                if (matchesSearch && matchesSuperUser && matchesActive) {
-                    card.style.display = '';
+                    role.includes(searchTerm)) {
+                    row.style.display = '';
                 } else {
-                    card.style.display = 'none';
+                    row.style.display = 'none';
                 }
             });
-        }
-        
-        searchInput.addEventListener('input', filterCards);
-        filterSuperUser.addEventListener('change', filterCards);
-        filterActiveUser.addEventListener('change', filterCards);
+        });
     });
 </script>
 {% endblock %}

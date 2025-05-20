@@ -11,8 +11,7 @@ from config import Config
 from flask_mail import Mail, Message
 from decimal import Decimal
 from datetime import datetime, timezone, timedelta
-
-
+from flask import send_from_directory
 
 # Inicialização do app
 app = Flask(__name__)
@@ -415,10 +414,23 @@ def initialize_database():
 @app.before_first_request
 def create_tables():
     initialize_database()
-
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(os.path.join(app.root_path, 'static'),
+                               'favicon.ico', mimetype='image/vnd.microsoft.icon')
 # Rotas de autenticação
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    """
+    Rota para login exclusivo de funcionários regulares.
+    """
+    # Se já estiver logado, redirecionar
+    if current_user.is_authenticated:
+        if current_user.is_superuser:
+            logout_user()  # Deslogar se for administrador tentando acessar área de funcionário
+        else:
+            return redirect(url_for('user_home'))
+    
     if request.method == 'POST':
         email = request.form.get('email')
         password = request.form.get('password')
@@ -430,43 +442,119 @@ def login():
         cursor.close()
         
         if user_data and check_password_hash(user_data['password_hash'], password):
-            user = User(user_data)
-            login_user(user)
-            
-            # Atualizar último login
-            conn.cursor().execute(
-                "UPDATE user SET last_login = %s WHERE id = %s", 
-                (datetime.utcnow(), user.id)
-            )
-            conn.commit()
-            conn.close()
-            
-            next_page = request.args.get('next')
-            if user.is_superuser:
-                return redirect(next_page or url_for('admin_home'))
-            else:
+            # Verificar se o usuário NÃO é um administrador
+            if not user_data['is_superuser']:
+                user = User(user_data)
+                login_user(user)
+                
+                # Atualizar último login
+                conn.cursor().execute(
+                    "UPDATE user SET last_login = %s WHERE id = %s", 
+                    (get_brazil_datetime(), user.id)
+                )
+                conn.commit()
+                conn.close()
+                
+                next_page = request.args.get('next')
                 return redirect(next_page or url_for('user_home'))
+            else:
+                # Se for administrador tentando entrar na área de funcionário
+                conn.close()
+                flash('Você é um administrador. Por favor, use a Área Restrita para acessar o sistema.', 'error')
         else:
             if conn:
                 conn.close()
             flash('Email ou senha inválidos!', 'error')
     
     return render_template('auth/login.html')
-
-@app.route('/logout')
-@login_required
-def logout():
-    logout_user()
-    return redirect(url_for('login'))
-
-# Rota padrão - redireciona para área adequada
-@app.route('/')
+@app.route('/dashboard')
 @login_required
 def index():
+    """
+    Rota de dashboard que redireciona para área adequada
+    com base no tipo de usuário.
+    """
     if current_user.is_superuser:
         return redirect(url_for('admin_home'))
     else:
         return redirect(url_for('user_home'))
+    
+@app.route('/logout')
+@login_required
+def logout():
+    """
+    Rota para logout que redireciona para a página de seleção de tipos de login.
+    """
+    logout_user()
+    # Redirecionar para a página inicial em vez da página de login
+    return redirect(url_for('landing_page'))
+
+# Rota padrão - redireciona para área adequada
+@app.route('/')
+def landing_page():
+    """
+    Página inicial do sistema que direciona para as áreas de login
+    de funcionário e administrador.
+    """
+    # Se o usuário já estiver logado, redireciona para a área adequada
+    if current_user.is_authenticated:
+        if current_user.is_superuser:
+            return redirect(url_for('admin_home'))
+        else:
+            return redirect(url_for('user_home'))
+            
+    return render_template('landing.html')
+
+
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    """
+    Rota para login exclusivo de administradores.
+    """
+    # Se já estiver logado, redirecionar
+    if current_user.is_authenticated:
+        if current_user.is_superuser:
+            return redirect(url_for('admin_home'))
+        else:
+            # Se não for admin, deslogar e pedir para logar novamente como admin
+            logout_user()
+    
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM user WHERE email = %s", (email,))
+        user_data = cursor.fetchone()
+        cursor.close()
+        
+        if user_data and check_password_hash(user_data['password_hash'], password):
+            # Verificar se o usuário é um administrador
+            if user_data['is_superuser']:
+                user = User(user_data)
+                login_user(user)
+                
+                # Atualizar último login
+                conn.cursor().execute(
+                    "UPDATE user SET last_login = %s WHERE id = %s", 
+                    (get_brazil_datetime(), user.id)
+                )
+                conn.commit()
+                conn.close()
+                
+                next_page = request.args.get('next')
+                return redirect(next_page or url_for('admin_home'))
+            else:
+                # Se não for administrador, rejeitar o login
+                conn.close()
+                flash('Acesso não autorizado. Esta área é exclusiva para administradores.', 'error')
+        else:
+            if conn:
+                conn.close()
+            flash('Email ou senha inválidos!', 'error')
+    
+    return render_template('auth/admin_login.html')
 
 # === Rotas de Administrador ===
 @app.route('/admin')

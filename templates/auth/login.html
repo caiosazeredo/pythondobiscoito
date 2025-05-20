@@ -1,14 +1,21 @@
+<!-- templates/auth/login.html (modificado) -->
 {% extends "base.html" %}
 
-{% block title %}Login - Casa do Biscoito{% endblock %}
+{% block title %}Login de Funcionário - Casa do Biscoito{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-center align-items-center" style="height: 90vh;">
     <div class="card shadow-sm" style="width: 500px;">
         <div class="card-body p-4">
             <div class="text-center mb-4">
+                <a href="{{ url_for('landing_page') }}" class="position-absolute top-0 start-0 m-3 text-warning">
+                    <i class="bi bi-arrow-left-circle"></i> Voltar
+                </a>
+                <span class="badge bg-warning text-dark position-absolute top-0 end-0 m-3">Funcionários</span>
+                
                 <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo" class="img-fluid mb-3" style="max-width: 150px;">
-                <h1 class="text-warning fw-bold">Entrar</h1>
+                <h1 class="text-warning fw-bold">Área do Funcionário</h1>
+                <p class="text-muted">Acesse o sistema com suas credenciais</p>
             </div>
             
             <form method="post" action="{{ url_for('login') }}">
