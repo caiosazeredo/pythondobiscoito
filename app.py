@@ -2334,67 +2334,111 @@ def batch_movements(unit_id, cashier_id):
         conn.close()
         return jsonify({'success': False, 'message': 'Caixa não encontrado ou não pertence a esta unidade!'})
     
-    # CORREÇÃO: Obter a data selecionada da URL (referrer)
-    selected_date = get_brazil_datetime().date()
-    
-    # Obter URL de referência
-    referrer = request.referrer
-    if referrer and 'date=' in referrer:
-        # Extrair a data da URL
-        date_str = referrer.split('date=')[1].split('&')[0]
-        try:
-            selected_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-        except (ValueError, IndexError):
-            # Em caso de erro, manter a data atual do Brasil
-            pass
-    
-    # Obter número de entradas
-    entry_count = int(request.form.get('entry_count', 0))
-    
-    if entry_count <= 0:
-        cursor.close()
-        conn.close()
-        return jsonify({'success': False, 'message': 'Nenhuma movimentação para processar!'})
-    
     try:
-        # Processar cada entrada
-        for i in range(1, entry_count + 1):
-            # Verificar se a entrada existe (pode ter sido removida pelo usuário)
-            if f'batch_payment_detail_{i}' not in request.form:
-                continue
-            
-            payment_method_id = request.form.get(f'batch_payment_detail_{i}')
-            amount = float(request.form.get(f'batch_amount_{i}', 0))
-            description = request.form.get(f'batch_description_{i}', '')
-            
-            if payment_method_id and amount > 0:
-                # CORREÇÃO: Combinar a data selecionada com a hora atual 
+        # Obter dados JSON do corpo da requisição
+        data = request.get_json()
+        
+        if not data or 'entries' not in data:
+            cursor.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Dados inválidos!'})
+        
+        entries = data.get('entries', [])
+        selected_date_str = data.get('date', '')
+        
+        # Validar se há entradas
+        if not entries:
+            cursor.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Nenhuma entrada para processar!'})
+        
+        # Obter a data selecionada
+        selected_date = get_brazil_datetime().date()
+        
+        if selected_date_str:
+            try:
+                selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+        
+        # Processar entradas
+        processed_count = 0
+        errors = []
+        
+        for i, entry in enumerate(entries):
+            try:
+                # Validar campos obrigatórios
+                payment_method_id = entry.get('payment_method')
+                amount = entry.get('amount')
+                description = entry.get('description', '')
+                
+                if not payment_method_id or not amount:
+                    errors.append(f"Entrada {i+1}: dados incompletos")
+                    continue
+                
+                # Validar valor
+                amount_float = float(amount)
+                if amount_float <= 0:
+                    errors.append(f"Entrada {i+1}: valor inválido")
+                    continue
+                
+                # Combinar a data selecionada com a hora atual
                 current_brazil_time = get_brazil_datetime().time()
                 movement_datetime = datetime.combine(selected_date, current_brazil_time)
                 
-                # Inserir movimentação usando a data selecionada
+                # Inserir movimentação
                 cursor.execute(
                     "INSERT INTO movement "
                     "(cashier_id, type, amount, payment_method, description, payment_status, created_at) "
                     "VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                    (cashier_id, 'entrada', amount, payment_method_id, description, 'realizado', movement_datetime)
+                    (cashier_id, 'entrada', amount_float, payment_method_id, 
+                     description, 'realizado', movement_datetime)
                 )
+                processed_count += 1
+                
+            except Exception as e:
+                errors.append(f"Entrada {i+1}: {str(e)}")
+                continue
         
-        conn.commit()
-        cursor.close()
-        conn.close()
-        
-        return jsonify({
-            'success': True, 
-            'message': f'{entry_count} movimentações foram registradas com sucesso!'
-        })
+        # Commit apenas se teve sucesso em pelo menos uma entrada
+        if processed_count > 0:
+            conn.commit()
+            
+            # Construir mensagem de retorno
+            message = f'{processed_count} movimentação(ões) registrada(s) com sucesso!'
+            if errors:
+                message += f' ({len(errors)} erro(s) encontrado(s))'
+            
+            cursor.close()
+            conn.close()
+            
+            return jsonify({
+                'success': True, 
+                'message': message,
+                'processed': processed_count,
+                'errors': errors
+            })
+        else:
+            conn.rollback()
+            cursor.close()
+            conn.close()
+            
+            error_message = 'Nenhuma movimentação foi registrada.'
+            if errors:
+                error_message += ' Erros: ' + '; '.join(errors)
+            
+            return jsonify({
+                'success': False, 
+                'message': error_message,
+                'errors': errors
+            })
         
     except Exception as e:
         conn.rollback()
         cursor.close()
         conn.close()
-        return jsonify({'success': False, 'message': f'Erro ao registrar movimentações: {str(e)}'})
-
+        return jsonify({'success': False, 'message': f'Erro ao processar requisição: {str(e)}'})
+    
 # Página 404
 @app.errorhandler(404)
 def page_not_found(e):
