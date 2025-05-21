@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Movimentações - Caixa {{ cashier.number }} - Casa do Biscoito{% endblock %}
+{% block title %}Movimentações - {% if cashier.number == 0 %}Caixa Financeiro{% else %}Caixa {{ cashier.number }}{% endif %} - Casa do Biscoito{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -11,27 +11,39 @@
             </a>
             <h4 class="mb-0">
                 {% if cashier.number == 0 %}
-                Caixa Financeiro
+                Caixa Financeiro - Controle de Saídas
                 {% else %}
                 Movimentação - Caixa {{ cashier.number }}
                 {% endif %}
             </h4>
             <div class="d-flex align-items-center">
-                <input type="date" class="form-control" id="dateFilter" value="{{ date }}">
+                <form method="post" id="dateForm">
+                    <input type="hidden" name="date_filter" id="hiddenDateFilter" value="{{ date }}">
+                    <input type="date" class="form-control" id="dateFilter" value="{{ date }}">
+                </form>
             </div>
         </div>
         
         <div class="card-body">
             <ul class="nav nav-tabs mb-4" id="movementTabs" role="tablist">
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="register-tab" data-bs-toggle="tab" data-bs-target="#register" type="button" role="tab" aria-controls="register" aria-selected="true">Registrar Movimentação</button>
+                    <button class="nav-link active" id="register-tab" data-bs-toggle="tab" data-bs-target="#register" type="button" role="tab" aria-controls="register" aria-selected="true">
+                        {% if is_financial_cashier %}Registrar Saída{% else %}Registrar Movimentação{% endif %}
+                    </button>
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab" aria-controls="history" aria-selected="false">Histórico</button>
                 </li>
+                {% if not is_financial_cashier %}
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="batch-tab" data-bs-toggle="tab" data-bs-target="#batch" type="button" role="tab" aria-controls="batch" aria-selected="false">Registro em Lote</button>
                 </li>
+                {% endif %}
+                {% if is_financial_cashier %}
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="estornos-tab" data-bs-toggle="tab" data-bs-target="#estornos" type="button" role="tab" aria-controls="estornos" aria-selected="false">Estornos do Dia</button>
+                </li>
+                {% endif %}
             </ul>
             
             <div class="tab-content" id="movementTabsContent">
@@ -42,6 +54,8 @@
                             <div class="card shadow-sm">
                                 <div class="card-body">
                                     <form method="post" action="{{ url_for('user_movements', unit_id=unit.id, cashier_id=cashier.id) }}">
+                                        <input type="hidden" name="current_date" value="{{ date }}">
+                                        
                                         <div class="mb-3">
                                             <label class="form-label">Tipo de Movimentação</label>
                                             <div class="d-flex gap-3 flex-wrap">
@@ -73,37 +87,12 @@
                                                         Despesa da Loja
                                                     </label>
                                                 </div>
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="radio" name="type" id="typeEntrada" value="entrada">
-                                                    <label class="form-check-label" for="typeEntrada">
-                                                        Entrada
-                                                    </label>
-                                                </div>
                                                 {% endif %}
                                             </div>
                                         </div>
                                         
-                                        {% if not is_financial_cashier %}
-                                        <div class="mb-3" id="statusContainer">
-                                            <label class="form-label">Status do Pagamento</label>
-                                            <div class="d-flex gap-3">
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="radio" name="payment_status" id="statusRealizado" value="realizado" checked>
-                                                    <label class="form-check-label" for="statusRealizado">
-                                                        Valor Recebido
-                                                    </label>
-                                                </div>
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="radio" name="payment_status" id="statusPendente" value="pendente">
-                                                    <label class="form-check-label" for="statusPendente">
-                                                        Pendente de Recebimento
-                                                    </label>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        {% endif %}
-                                        
                                         <!-- Container para categorias de despesa -->
+                                        {% if is_financial_cashier %}
                                         <div class="mb-3" id="expenseCategoryContainer" style="display: none;">
                                             <label for="expense_category" class="form-label">Categoria de Despesa</label>
                                             <select class="form-select" id="expense_category" name="expense_category">
@@ -138,19 +127,6 @@
                                                 </optgroup>
                                             </select>
                                         </div>
-                                        
-                                        <!-- Tipos específicos de entrada para o Caixa Financeiro -->
-                                        {% if is_financial_cashier %}
-                                        <div class="mb-3" id="entryTypeContainer" style="display: none;">
-                                            <label for="entry_type" class="form-label">Tipo de Entrada</label>
-                                            <select class="form-select" id="entry_type" name="entry_type">
-                                                <option value="dinheiro">Dinheiro</option>
-                                                <option value="moedas">Moedas</option>
-                                                <option value="troco">Troco</option>
-                                                <option value="pote">Pote</option>
-                                                <option value="caixa_inicial">Caixa Inicial</option>
-                                            </select>
-                                        </div>
                                         {% endif %}
                                         
                                         <div class="mb-3">
@@ -168,23 +144,6 @@
                                             <select class="form-select" id="payment_method" name="payment_method" required>
                                                 <option value="">Selecione o tipo de pagamento primeiro</option>
                                             </select>
-                                        </div>
-                                        
-                                        <div class="row mb-3" id="dinheiroFields" style="display: none;">
-                                            <div class="col-md-6">
-                                                <label for="coins_in" class="form-label">Entrada de moedas</label>
-                                                <div class="input-group">
-                                                    <span class="input-group-text">R$</span>
-                                                    <input type="number" class="form-control" id="coins_in" name="coins_in" step="0.01" min="0">
-                                                </div>
-                                            </div>
-                                            <div class="col-md-6">
-                                                <label for="coins_out" class="form-label">Saída de moedas</label>
-                                                <div class="input-group">
-                                                    <span class="input-group-text">R$</span>
-                                                    <input type="number" class="form-control" id="coins_out" name="coins_out" step="0.01" min="0">
-                                                </div>
-                                            </div>
                                         </div>
                                         
                                         <div class="mb-3">
@@ -209,193 +168,133 @@
                         </div>
                         
                         <div class="col-md-4">
-                            <!-- Card de Valor Base - Mais responsivo -->
+                            <!-- Card de Saldo em Caixa -->
                             <div class="card shadow-sm bg-light mb-4">
                                 <div class="card-body">
-                                    <h5 class="card-title mb-3">Valor Base</h5>
-                                    <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap">
-                                        <span class="me-2">Valor Base Caixa {{ cashier.number }}:</span>
-                                        <span class="fw-bold">R$ {{ "%.2f"|format(cashier_base_amount) }}</span>
+                                    <h5 class="card-title mb-3">Saldo em Caixa</h5>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span>Valor Base Mensal:</span>
+                                        <span class="fw-bold">R$ {{ "%.2f"|format(base_amount) }}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span>Dinheiro/PIX Hoje:</span>
+                                        <span class="fw-bold">R$ {{ "%.2f"|format(saldo_dinheiro_dia) }}</span>
+                                    </div>
+                                    <hr>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="fw-bold">Total em Caixa:</span>
+                                        <span class="fw-bold {{ 'text-success' if saldo_caixa_total >= 0 else 'text-danger' }}">
+                                            R$ {{ "%.2f"|format(saldo_caixa_total) }}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
                             
-                            <!-- Card de PDV (Campos Z, T, devo) - Layout melhorado para maior clareza -->
+                            {% if not is_financial_cashier %}
+                            <!-- Card do PDV para caixas normais -->
                             <div class="card shadow-sm bg-light mb-4">
-                                <div class="card-header bg-light py-3 d-flex justify-content-between align-items-center">
-                                    <h5 class="mb-0">Conferência de Caixa (PDV)</h5>
-                                    <button type="button" class="btn btn-outline-warning btn-sm" data-bs-toggle="modal" data-bs-target="#devoModal">
-                                        <i class="bi bi-plus-circle me-1"></i> Registrar Cancelamento
-                                    </button>
+                                <div class="card-header bg-light py-3">
+                                    <h5 class="mb-0">Conferência PDV</h5>
                                 </div>
                                 <div class="card-body">
-                                    <form method="post" class="mb-4">
+                                    <form method="post" class="mb-3">
                                         <div class="mb-3">
-                                            <label for="z_value" class="form-label fw-bold">Valor Z (Fechamento PDV)</label>
+                                            <label for="z_value" class="form-label">Valor Z (PDV)</label>
                                             <div class="input-group">
                                                 <span class="input-group-text">R$</span>
                                                 <input type="number" name="z_value" id="z_value" class="form-control" step="0.01" value="{{ z_total }}">
-                                                <button type="submit" class="btn btn-warning">Atualizar Z</button>
+                                                <button type="submit" class="btn btn-warning btn-sm">Atualizar</button>
                                             </div>
-                                            <small class="form-text text-muted">Insira aqui o valor exato que aparece no recibo Z (fechamento do PDV)</small>
                                         </div>
                                     </form>
                                     
-                                    <div class="card border mb-3">
-                                        <div class="card-header bg-light">
-                                            <h6 class="mb-0">Cálculo da Conferência</h6>
-                                        </div>
-                                        <div class="card-body">
-                                            <div class="row g-3">
-                                                <div class="col-md-6">
-                                                    <div class="mb-3">
-                                                        <label class="form-label text-muted">Vendas Registradas (Bruto)</label>
-                                                        <div class="input-group">
-                                                            <span class="input-group-text"><i class="bi bi-plus-circle text-success"></i></span>
-                                                            <input type="text" class="form-control-plaintext fw-bold ps-2" readonly value="R$ {{ "%.2f"|format(t_total + devo_total) }}">
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div class="col-md-6">
-                                                    <div class="mb-3">
-                                                        <label class="form-label text-muted">Cancelamentos/Devoluções</label>
-                                                        <div class="input-group">
-                                                            <span class="input-group-text"><i class="bi bi-dash-circle text-danger"></i></span>
-                                                            <input type="text" class="form-control-plaintext fw-bold ps-2 text-danger" readonly value="R$ {{ "%.2f"|format(devo_total) }}">
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            
-                                            <hr>
-                                            
-                                            <div class="row g-3">
-                                                <div class="col-md-6">
-                                                    <div class="mb-3">
-                                                        <label class="form-label fw-bold">Total Real Apurado (T)</label>
-                                                        <div class="input-group">
-                                                            <span class="input-group-text bg-success text-white"><i class="bi bi-calculator"></i></span>
-                                                            <input type="text" class="form-control-plaintext fw-bold ps-2 text-success fs-5" readonly value="R$ {{ "%.2f"|format(t_total) }}">
-                                                        </div>
-                                                        <small class="text-muted">Vendas - Cancelamentos</small>
-                                                    </div>
-                                                </div>
-                                                <div class="col-md-6">
-                                                    <div class="mb-3">
-                                                        <label class="form-label fw-bold">Valor Z (Recibo PDV)</label>
-                                                        <div class="input-group">
-                                                            <span class="input-group-text bg-primary text-white"><i class="bi bi-receipt"></i></span>
-                                                            <input type="text" class="form-control-plaintext fw-bold ps-2 fs-5" readonly value="R$ {{ "%.2f"|format(z_total) }}">
-                                                        </div>
-                                                        <small class="text-muted">Valor informado pelo PDV</small>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            
-                                            <div class="alert {{ 'alert-success' if dif_total == 0 else 'alert-danger' }} mt-3 mb-0">
-                                                <div class="d-flex align-items-center">
-                                                    <div class="me-3">
-                                                        {% if dif_total == 0 %}
-                                                        <i class="bi bi-check-circle-fill fs-1"></i>
-                                                        {% else %}
-                                                        <i class="bi bi-exclamation-triangle-fill fs-1"></i>
-                                                        {% endif %}
-                                                    </div>
-                                                    <div>
-                                                        <h6 class="mb-1">Diferença: {{ "R$ " + "%.2f"|format(dif_total) }}</h6>
-                                                        {% if dif_total == 0 %}
-                                                        <p class="mb-0">O caixa está batendo corretamente!</p>
-                                                        {% else %}
-                                                        <p class="mb-0">Há uma diferença entre os valores do caixa e o recibo Z. Verifique possíveis erros de lançamento.</p>
-                                                        {% endif %}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span>Total Vendas (T):</span>
+                                        <span class="fw-bold text-success">R$ {{ "%.2f"|format(t_total) }}</span>
                                     </div>
-                                    
-                                    <div class="text-center small">
-                                        <i class="bi bi-info-circle me-1"></i> 
-                                        Diferença = Total Real Apurado (T) - Valor Z
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span>Valor Z:</span>
+                                        <span class="fw-bold">R$ {{ "%.2f"|format(z_total) }}</span>
                                     </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Card do Pote (apenas para Caixa Financeiro) - Layout responsivo -->
-                            {% if is_financial_cashier %}
-                            <div class="card shadow-sm bg-light mb-4">
-                                <div class="card-body">
-                                    <h5 class="card-title mb-3">Pote</h5>
-                                    
-                                    <form method="post" class="mb-3">
-                                        <div class="mb-3">
-                                            <label for="pot_amount" class="form-label">Valor do Pote</label>
-                                            <div class="input-group">
-                                                <span class="input-group-text">R$</span>
-                                                <input type="number" name="pot_amount" id="pot_amount" class="form-control" step="0.01" value="{{ pot_amount }}">
-                                                <button type="submit" class="btn btn-sm btn-warning">Atualizar</button>
-                                            </div>
-                                            <small class="form-text text-muted">Valor interno com valores de entrada</small>
-                                        </div>
-                                    </form>
+                                    <hr>
+                                    <div class="d-flex justify-content-between">
+                                        <span>Diferença:</span>
+                                        <span class="fw-bold {{ 'text-success' if dif_total == 0 else 'text-danger' }}">
+                                            R$ {{ "%.2f"|format(dif_total) }}
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                             {% endif %}
-                        
-                            <!-- Card de Resumo do Dia - Layout responsivo -->
+                            
+                            <!-- Card de Resumo do Dia -->
                             <div class="card shadow-sm bg-light">
                                 <div class="card-body">
-                                    <h5 class="card-title mb-3">Resumo do Dia</h5>
+                                    <h5 class="card-title mb-3">
+                                        {% if is_financial_cashier %}
+                                        Resumo Geral do Dia
+                                        {% else %}
+                                        Resumo do Caixa
+                                        {% endif %}
+                                    </h5>
                                     
+                                    {% if is_financial_cashier %}
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span>Total Entradas:</span>
+                                        <span class="fw-bold text-success">R$ {{ "%.2f"|format(total_entrada_all) }}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span>Total Estornos:</span>
+                                        <span class="fw-bold text-danger">R$ {{ "%.2f"|format(total_estorno_all) }}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span>Total Saídas:</span>
+                                        <span class="fw-bold text-danger">R$ {{ "%.2f"|format(total_saida_all) }}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span>Total Despesas:</span>
+                                        <span class="fw-bold text-danger">R$ {{ "%.2f"|format(total_despesa_all) }}</span>
+                                    </div>
+                                    <hr>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="fw-bold">Saldo Líquido:</span>
+                                        <span class="fw-bold {{ 'text-success' if saldo_liquido_dia >= 0 else 'text-danger' }}">
+                                            R$ {{ "%.2f"|format(saldo_liquido_dia) }}
+                                        </span>
+                                    </div>
+                                    {% else %}
                                     <div class="small text-muted mb-2">Valores por Categoria:</div>
                                     
                                     {% if payment_category_totals %}
                                         {% for category, total in payment_category_totals.items() %}
-                                            <div class="d-flex justify-content-between align-items-center small mb-1 flex-wrap">
-                                                <span class="me-2">{{ category|capitalize }}:</span>
-                                                <span class="{{ 'text-success' if total > 0 else '' }}">
-                                                    R$ {{ "%.2f"|format(total) }}
-                                                </span>
+                                            <div class="d-flex justify-content-between align-items-center small mb-1">
+                                                <span>{{ category|capitalize }}:</span>
+                                                <span class="text-success">R$ {{ "%.2f"|format(total) }}</span>
                                             </div>
                                         {% endfor %}
-                                    {% else %}
-                                        <div class="text-center small text-muted">Nenhuma movimentação registrada</div>
                                     {% endif %}
                                     
                                     <hr>
                                     
-                                    <div class="d-flex justify-content-between align-items-center fw-bold flex-wrap">
-                                        <span class="me-2">Total Entradas:</span>
+                                    <div class="d-flex justify-content-between align-items-center fw-bold">
+                                        <span>Total Entradas:</span>
                                         <span class="text-success">R$ {{ "%.2f"|format(total_entrada) }}</span>
                                     </div>
                                     
-                                    <div class="d-flex justify-content-between align-items-center fw-bold flex-wrap">
-                                        <span class="me-2">Total Estornos:</span>
+                                    <div class="d-flex justify-content-between align-items-center fw-bold">
+                                        <span>Total Estornos:</span>
                                         <span class="text-danger">R$ {{ "%.2f"|format(total_estorno) }}</span>
                                     </div>
                                     
-                                    <div class="d-flex justify-content-between align-items-center fw-bold flex-wrap">
-                                        <span class="me-2">Total Despesas:</span>
-                                        <span class="text-danger">R$ {{ "%.2f"|format(total_despesa) }}</span>
-                                    </div>
-                                    
                                     <hr>
                                     
-                                    <div class="d-flex justify-content-between align-items-center fw-bold flex-wrap">
-                                        <span class="me-2">Saldo do Dia:</span>
-                                        <span class="{{ 'text-success' if total_entrada - total_estorno - total_despesa >= 0 else 'text-danger' }}">
-                                            R$ {{ "%.2f"|format(total_entrada - total_estorno - total_despesa) }}
+                                    <div class="d-flex justify-content-between align-items-center fw-bold">
+                                        <span>Saldo do Caixa:</span>
+                                        <span class="{{ 'text-success' if total_entrada - total_estorno >= 0 else 'text-danger' }}">
+                                            R$ {{ "%.2f"|format(total_entrada - total_estorno) }}
                                         </span>
                                     </div>
-                                    
-                                    <hr>
-                                    
-                                    <div class="d-flex justify-content-between align-items-center fw-bold flex-wrap">
-                                        <span class="me-2">Saldo do Caixa:</span>
-                                        <span class="{{ 'text-success' if financial_balance >= 0 else 'text-danger' }}">
-                                            R$ {{ "%.2f"|format(financial_balance + base_amount) }}
-                                        </span>
-                                    </div>
+                                    {% endif %}
                                 </div>
                             </div>
                         </div>
@@ -410,7 +309,6 @@
                                 <tr>
                                     <th>Horário</th>
                                     <th>Tipo</th>
-                                    <th>Status</th>
                                     <th>Forma</th>
                                     <th>Valor</th>
                                     <th>Descrição</th>
@@ -430,22 +328,9 @@
                                         <span class="badge bg-warning text-dark">Despesa</span>
                                         {% elif mov.type == 'saida' %}
                                         <span class="badge bg-danger">Saída</span>
-                                        {% else %}
-                                        <span class="badge bg-secondary">{{ mov.type }}</span>
                                         {% endif %}
                                     </td>
-                                    <td>
-                                        <span class="badge {{ 'bg-warning' if mov.payment_status == 'pendente' else 'bg-success' }}">
-                                            {{ "Pendente" if mov.payment_status == 'pendente' else "Realizado" }}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        {% for method in payment_methods %}
-                                            {% if method.id == mov.payment_method %}
-                                                {{ method.name }}
-                                            {% endif %}
-                                        {% endfor %}
-                                    </td>
+                                    <td>{{ mov.payment_method_name }}</td>
                                     <td class="fw-bold {{ 'text-success' if mov.type == 'entrada' else 'text-danger' }}">
                                         R$ {{ "%.2f"|format(mov.amount) }}
                                     </td>
@@ -460,7 +345,7 @@
                                 </tr>
                                 {% else %}
                                 <tr>
-                                    <td colspan="7" class="text-center">Nenhuma movimentação registrada para esta data.</td>
+                                    <td colspan="6" class="text-center">Nenhuma movimentação registrada para esta data.</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -468,7 +353,8 @@
                     </div>
                 </div>
                 
-                <!-- Aba de Registro em Lote -->
+                <!-- Aba de Registro em Lote (apenas para caixas normais) -->
+                {% if not is_financial_cashier %}
                 <div class="tab-pane fade" id="batch" role="tabpanel" aria-labelledby="batch-tab">
                     <div class="card shadow-sm">
                         <div class="card-body">
@@ -503,38 +389,53 @@
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal para registrar cancelamentos -->
-<div class="modal fade" id="devoModal" tabindex="-1" aria-labelledby="devoModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="devoModalLabel">Registrar Cancelamento</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <form method="post">
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="devo_value" class="form-label">Valor do Cancelamento</label>
-                        <div class="input-group">
-                            <span class="input-group-text">R$</span>
-                            <input type="number" name="devo_value" id="devo_value" class="form-control" step="0.01" required>
+                {% endif %}
+                
+                <!-- Aba de Estornos (apenas para caixa financeiro) -->
+                {% if is_financial_cashier %}
+                <div class="tab-pane fade" id="estornos" role="tabpanel" aria-labelledby="estornos-tab">
+                    <div class="card shadow-sm">
+                        <div class="card-body">
+                            <h5 class="card-title mb-3">Estornos Registrados Hoje</h5>
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Horário</th>
+                                            <th>Caixa</th>
+                                            <th>Forma de Pagamento</th>
+                                            <th>Valor</th>
+                                            <th>Descrição</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for estorno in all_estornos %}
+                                        <tr>
+                                            <td>{{ estorno.created_at.strftime('%H:%M') }}</td>
+                                            <td>
+                                                {% if estorno.cashier_number == 0 %}
+                                                Financeiro
+                                                {% else %}
+                                                Caixa {{ estorno.cashier_number }}
+                                                {% endif %}
+                                            </td>
+                                            <td>{{ estorno.payment_method_name }}</td>
+                                            <td class="text-danger fw-bold">R$ {{ "%.2f"|format(estorno.amount) }}</td>
+                                            <td>{{ estorno.description }}</td>
+                                        </tr>
+                                        {% else %}
+                                        <tr>
+                                            <td colspan="5" class="text-center">Nenhum estorno registrado hoje.</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
-                    <div class="mb-3">
-                        <label for="devo_reason" class="form-label">Motivo</label>
-                        <textarea name="devo_reason" id="devo_reason" class="form-control" rows="3"></textarea>
-                    </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-warning">Registrar</button>
-                </div>
-            </form>
+                {% endif %}
+            </div>
         </div>
     </div>
 </div>
@@ -544,25 +445,19 @@
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Atualizar ao mudar a data
-        document.getElementById('dateFilter').addEventListener('change', function() {
-            window.location.href = "{{ url_for('user_movements', unit_id=unit.id, cashier_id=cashier.id) }}?date=" + this.value;
+        const dateFilter = document.getElementById('dateFilter');
+        const hiddenDateFilter = document.getElementById('hiddenDateFilter');
+        const dateForm = document.getElementById('dateForm');
+        
+        dateFilter.addEventListener('change', function() {
+            hiddenDateFilter.value = this.value;
+            dateForm.submit();
         });
         
         // Toggle campos baseados no tipo de pagamento
         const paymentMethodMain = document.getElementById('payment_method_main');
         const paymentMethodDetail = document.getElementById('payment_method');
-        const dinheiroFields = document.getElementById('dinheiroFields');
-        const ticketFields = document.getElementById('ticketFields');
-        
-        {% if not is_financial_cashier %}
-        const statusContainer = document.getElementById('statusContainer');
-        {% endif %}
-        
         const expenseCategoryContainer = document.getElementById('expenseCategoryContainer');
-        
-        {% if is_financial_cashier %}
-        const entryTypeContainer = document.getElementById('entryTypeContainer');
-        {% endif %}
         
         const typeRadios = document.getElementsByName('type');
         
@@ -596,10 +491,6 @@
                             paymentMethodDetail.appendChild(option);
                         });
                     }
-                    
-                    // Dispara o evento change para atualizar os campos
-                    const event = new Event('change');
-                    paymentMethodDetail.dispatchEvent(event);
                 })
                 .catch(error => console.error('Erro ao carregar formas de pagamento:', error));
         }
@@ -609,282 +500,275 @@
                 loadPaymentMethods(this.value);
             } else {
                 paymentMethodDetail.innerHTML = '<option value="">Selecione o tipo de pagamento primeiro</option>';
-                dinheiroFields.style.display = 'none';
-                ticketFields.style.display = 'none';
-            }
-        });
-        
-        paymentMethodDetail.addEventListener('change', function() {
-            if (this.value) {
-                const selectedOption = this.options[this.selectedIndex];
-                const category = selectedOption.getAttribute('data-category');
-                
-                dinheiroFields.style.display = (category === 'dinheiro') ? 'flex' : 'none';
-                ticketFields.style.display = (category === 'ticket') ? 'block' : 'none';
-            } else {
-                dinheiroFields.style.display = 'none';
-                ticketFields.style.display = 'none';
             }
         });
         
         // Toggle containers baseados no tipo de movimentação
+        {% if is_financial_cashier %}
         for (const radio of typeRadios) {
             radio.addEventListener('change', function() {
-                {% if not is_financial_cashier %}
-                if (this.value === 'entrada') {
-                    statusContainer.style.display = 'block';
-                } else if (this.value === 'estorno') {
-                    statusContainer.style.display = 'none';
-                }
-                {% else %}
                 if (this.value === 'saida') {
                     expenseCategoryContainer.style.display = 'none';
-                    entryTypeContainer.style.display = 'none';
                 } else if (this.value === 'despesa_loja') {
                     expenseCategoryContainer.style.display = 'block';
-                    entryTypeContainer.style.display = 'none';
-                } else if (this.value === 'entrada') {
-                    expenseCategoryContainer.style.display = 'none';
-                    entryTypeContainer.style.display = 'block';
                 }
-                {% endif %}
             });
         }
         
         // Disparar evento para configuração inicial
         document.querySelector('input[name="type"]:checked').dispatchEvent(new Event('change'));
-        
-        // Script para registro de movimentações em lote
-        const batchForm = document.getElementById('batchMovementsForm');
-        const batchContainer = document.getElementById('batchEntriesContainer');
-        const addEntryBtn = document.getElementById('addBatchEntry');
-        const saveAllBtn = document.getElementById('saveBatchEntries');
-        
-        if (batchForm && batchContainer && addEntryBtn && saveAllBtn) {
-            let entryCount = 0;
-            let lastPaymentMethod = null;
-            
-            // Função para adicionar uma nova linha de entrada
-            function addBatchEntry() {
-                entryCount++;
-                
-                const entryRow = document.createElement('div');
-                entryRow.className = 'batch-entry row mb-2 border-bottom pb-2';
-                entryRow.setAttribute('data-entry-id', entryCount);
-                
-                let paymentMethodOptions = '<option value="">Selecione</option>';
-                
-                // Usar o último método de pagamento como default se existir
-                if (lastPaymentMethod) {
-                    const paymentMethods = document.querySelectorAll('#payment_method_main option');
-                    paymentMethods.forEach(option => {
-                        if (option.value) {
-                            if (option.value === lastPaymentMethod) {
-                                paymentMethodOptions += `<option value="${option.value}" data-category="${option.getAttribute('data-category')}" selected>${option.textContent}</option>`;
-                            } else {
-                                paymentMethodOptions += `<option value="${option.value}" data-category="${option.getAttribute('data-category')}">${option.textContent}</option>`;
-                            }
-                        }
-                    });
-                } else {
-                    const paymentMethods = document.querySelectorAll('#payment_method_main option');
-                    paymentMethods.forEach(option => {
-                        if (option.value) {
-                            paymentMethodOptions += `<option value="${option.value}" data-category="${option.getAttribute('data-category')}">${option.textContent}</option>`;
-                        }
-                    });
-                }
-                
-                entryRow.innerHTML = `
-                    <div class="col-md-3">
-                        <select class="form-select batch-payment-method" name="batch_payment_method_${entryCount}" required>
-                            ${paymentMethodOptions}
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <select class="form-select batch-payment-detail" name="batch_payment_detail_${entryCount}" required>
-                            <option value="">Selecione o tipo primeiro</option>
-                        </select>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="input-group">
-                            <span class="input-group-text">R$</span>
-                            <input type="number" class="form-control batch-amount" name="batch_amount_${entryCount}" step="0.01" min="0.01" required>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <input type="text" class="form-control batch-description" name="batch_description_${entryCount}" placeholder="Descrição (opcional)">
-                    </div>
-                    <div class="col-md-1">
-                        <button type="button" class="btn btn-danger btn-sm remove-entry">
-                            <i class="bi bi-trash"></i>
-                        </button>
-                    </div>
-                `;
-                
-                batchContainer.appendChild(entryRow);
-                
-                // Adicionar event listeners
-                const paymentMethodSelect = entryRow.querySelector('.batch-payment-method');
-                const paymentDetailSelect = entryRow.querySelector('.batch-payment-detail');
-                const removeBtn = entryRow.querySelector('.remove-entry');
-                const amountInput = entryRow.querySelector('.batch-amount');
-                const descriptionInput = entryRow.querySelector('.batch-description');
-                
-                // Carregar opções detalhadas com base no método de pagamento
-                paymentMethodSelect.addEventListener('change', function() {
-                    if (this.value) {
-                        lastPaymentMethod = this.value;
-                        loadPaymentDetails(this.value, paymentDetailSelect);
-                    } else {
-                        paymentDetailSelect.innerHTML = '<option value="">Selecione o tipo primeiro</option>';
-                    }
-                });
-                
-                // Disparar o evento de change se tiver valor inicial
-                if (paymentMethodSelect.value) {
-                    paymentMethodSelect.dispatchEvent(new Event('change'));
-                }
-                
-                // Remover entrada
-                removeBtn.addEventListener('click', function() {
-                    entryRow.remove();
-                });
-                
-                // Permitir adicionar nova linha ao pressionar Enter no campo de valor
-                amountInput.addEventListener('keypress', function(e) {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        
-                        // Verificar se o campo de valor está preenchido
-                        if (this.value && parseFloat(this.value) > 0) {
-                            addBatchEntry();
-                        } else {
-                            // Mostrar mensagem de erro
-                            Swal.fire({
-                                icon: 'warning',
-                                title: 'Atenção',
-                                text: 'Preencha o valor antes de adicionar uma nova linha',
-                                confirmButtonColor: '#fec32e'
-                            });
-                        }
-                    }
-                });
-                
-                // Fazer a descrição opcional
-                descriptionInput.required = false;
-            }
-            
-            // Função para carregar opções detalhadas de pagamento
-            function loadPaymentDetails(parentId, selectElement) {
-                fetch(`/api/payment_methods/${parentId}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        selectElement.innerHTML = '';
-                        
-                        if (data.length === 0) {
-                            // Se não houver subcategorias, usa o próprio método principal
-                            const option = document.createElement('option');
-                            option.value = parentId;
-                            
-                            // Encontrar o texto do método principal
-                            const mainSelect = document.querySelector(`[data-entry-id="${selectElement.closest('.batch-entry').getAttribute('data-entry-id')}"] .batch-payment-method`);
-                            option.textContent = mainSelect.options[mainSelect.selectedIndex].textContent;
-                            
-                            selectElement.appendChild(option);
-                        } else {
-                            // Adiciona opção padrão
-                            const defaultOption = document.createElement('option');
-                            defaultOption.value = '';
-                            defaultOption.textContent = 'Selecione';
-                            selectElement.appendChild(defaultOption);
-                            
-                            // Adiciona subcategorias
-                            data.forEach(method => {
-                                const option = document.createElement('option');
-                                option.value = method.id;
-                                option.textContent = method.name;
-                                selectElement.appendChild(option);
-                            });
-                        }
-                    })
-                    .catch(error => console.error('Erro ao carregar formas de pagamento:', error));
-            }
-            
-            // Adicionar primeira entrada ao carregar a página
-            addEntryBtn.addEventListener('click', addBatchEntry);
-            
-            // Adicionar entrada inicial
-            addBatchEntry();
-            
-            // Salvar todas as entradas
-            saveAllBtn.addEventListener('click', function() {
-                // Verificar se todos os campos obrigatórios estão preenchidos
-                const requiredFields = batchContainer.querySelectorAll('select[required], input[required]');
-                let isValid = true;
-                
-                requiredFields.forEach(field => {
-                    if (!field.value) {
-                        isValid = false;
-                        field.classList.add('is-invalid');
-                    } else {
-                        field.classList.remove('is-invalid');
-                    }
-                });
-                
-                if (!isValid) {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Erro',
-                        text: 'Preencha todos os campos obrigatórios',
-                        confirmButtonColor: '#fec32e'
-                    });
-                    return;
-                }
-                
-                // Serializar o formulário
-                const formData = new FormData(batchForm);
-                
-                // Adicionar informação sobre quantas entradas existem
-                formData.append('entry_count', entryCount);
-                
-                // Enviar via fetch API
-                fetch(batchForm.action, {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Sucesso',
-                            text: data.message,
-                            confirmButtonColor: '#fec32e'
-                        }).then(() => {
-                            // Recarregar a página para mostrar as novas entradas
-                            window.location.reload();
-                        });
-                    } else {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Erro',
-                            text: data.message,
-                            confirmButtonColor: '#fec32e'
-                        });
-                    }
-                })
-                .catch(error => {
-                    console.error('Erro ao salvar movimentações:', error);
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Erro',
-                        text: 'Ocorreu um erro ao salvar as movimentações',
-                        confirmButtonColor: '#fec32e'
-                    });
-                });
-            });
-        }
+        {% endif %}
     });
 </script>
+
+{% if not is_financial_cashier %}
+<!-- Script para registro em lote corrigido -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const batchForm = document.getElementById('batchMovementsForm');
+    const batchContainer = document.getElementById('batchEntriesContainer');
+    const addEntryBtn = document.getElementById('addBatchEntry');
+    const saveAllBtn = document.getElementById('saveBatchEntries');
+    
+    if (!batchForm || !batchContainer || !addEntryBtn || !saveAllBtn) {
+        return;
+    }
+    
+    let entryCount = 0;
+    let lastPaymentMethod = null;
+    let lastPaymentDetail = null;
+    
+    // Função para adicionar uma nova linha de entrada
+    function addBatchEntry() {
+        entryCount++;
+        
+        const entryRow = document.createElement('div');
+        entryRow.className = 'batch-entry row mb-2 border-bottom pb-2';
+        entryRow.setAttribute('data-entry-id', entryCount);
+        
+        let paymentMethodOptions = '<option value="">Selecione</option>';
+        
+        // Copiar opções do select principal
+        const mainSelectOptions = document.querySelectorAll('#payment_method_main option');
+        mainSelectOptions.forEach(option => {
+            if (option.value) {
+                if (lastPaymentMethod && option.value === lastPaymentMethod) {
+                    paymentMethodOptions += `<option value="${option.value}" data-category="${option.getAttribute('data-category')}" selected>${option.textContent}</option>`;
+                } else {
+                    paymentMethodOptions += `<option value="${option.value}" data-category="${option.getAttribute('data-category')}">${option.textContent}</option>`;
+                }
+            }
+        });
+        
+        entryRow.innerHTML = `
+            <div class="col-md-3">
+                <select class="form-select batch-payment-method" name="batch_payment_method_${entryCount}" required>
+                    ${paymentMethodOptions}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select class="form-select batch-payment-detail" name="batch_payment_detail_${entryCount}" required>
+                    <option value="">Selecione o tipo primeiro</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <div class="input-group">
+                    <span class="input-group-text">R$</span>
+                    <input type="number" class="form-control batch-amount" name="batch_amount_${entryCount}" step="0.01" min="0.01" required>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <input type="text" class="form-control batch-description" name="batch_description_${entryCount}" placeholder="Descrição (opcional)">
+            </div>
+            <div class="col-md-1">
+                <button type="button" class="btn btn-danger btn-sm remove-entry">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        `;
+        
+        batchContainer.appendChild(entryRow);
+        
+        // Adicionar event listeners
+        const paymentMethodSelect = entryRow.querySelector('.batch-payment-method');
+        const paymentDetailSelect = entryRow.querySelector('.batch-payment-detail');
+        const removeBtn = entryRow.querySelector('.remove-entry');
+        const amountInput = entryRow.querySelector('.batch-amount');
+        
+        // Carregar opções detalhadas com base no método de pagamento
+        paymentMethodSelect.addEventListener('change', function() {
+            if (this.value) {
+                lastPaymentMethod = this.value;
+                loadPaymentDetails(this.value, paymentDetailSelect);
+            } else {
+                paymentDetailSelect.innerHTML = '<option value="">Selecione o tipo primeiro</option>';
+                lastPaymentDetail = null;
+            }
+        });
+        
+        // Salvar último detalhamento selecionado
+        paymentDetailSelect.addEventListener('change', function() {
+            if (this.value) {
+                lastPaymentDetail = this.value;
+            }
+        });
+        
+        // Se tiver valor inicial, disparar o change
+        if (paymentMethodSelect.value) {
+            paymentMethodSelect.dispatchEvent(new Event('change'));
+        }
+        
+        // Remover entrada
+        removeBtn.addEventListener('click', function() {
+            entryRow.remove();
+        });
+        
+        // Permitir adicionar nova linha ao pressionar Enter
+        amountInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (this.value && parseFloat(this.value) > 0) {
+                    addBatchEntry();
+                }
+            }
+        });
+    }
+    
+    // Função para carregar opções detalhadas de pagamento
+    function loadPaymentDetails(parentId, selectElement) {
+        fetch(`/api/payment_methods/${parentId}`)
+            .then(response => response.json())
+            .then(data => {
+                selectElement.innerHTML = '';
+                
+                if (data.length === 0) {
+                    const option = document.createElement('option');
+                    option.value = parentId;
+                    const mainSelect = selectElement.closest('.batch-entry').querySelector('.batch-payment-method');
+                    option.textContent = mainSelect.options[mainSelect.selectedIndex].textContent;
+                    selectElement.appendChild(option);
+                    
+                    if (lastPaymentMethod === parentId) {
+                        lastPaymentDetail = parentId;
+                        option.selected = true;
+                    }
+                } else {
+                    // Adiciona opção padrão
+                    const defaultOption = document.createElement('option');
+                    defaultOption.value = '';
+                    defaultOption.textContent = 'Selecione';
+                    selectElement.appendChild(defaultOption);
+                    
+                    // Adiciona subcategorias
+                    let foundLastDetail = false;
+                    data.forEach(method => {
+                        const option = document.createElement('option');
+                        option.value = method.id;
+                        option.textContent = method.name;
+                        
+                        if (lastPaymentDetail && method.id.toString() === lastPaymentDetail.toString()) {
+                            option.selected = true;
+                            foundLastDetail = true;
+                        }
+                        
+                        selectElement.appendChild(option);
+                    });
+                    
+                    // Se não encontrou o último detalhamento, selecionar o primeiro
+                    if (!foundLastDetail && data.length > 0 && selectElement.options.length > 1) {
+                        selectElement.options[1].selected = true;
+                        lastPaymentDetail = selectElement.options[1].value;
+                    }
+                }
+            })
+            .catch(error => console.error('Erro ao carregar formas de pagamento:', error));
+    }
+    
+    // Adicionar primeira entrada ao clicar no botão
+    addEntryBtn.addEventListener('click', addBatchEntry);
+    
+    // Não adicionar entrada inicial automaticamente
+    
+    // Salvar todas as entradas
+    saveAllBtn.addEventListener('click', function() {
+        // Verificar se existem entradas
+        const entries = batchContainer.querySelectorAll('.batch-entry');
+        if (entries.length === 0) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Atenção',
+                text: 'Adicione pelo menos uma entrada antes de salvar',
+                confirmButtonColor: '#fec32e'
+            });
+            return;
+        }
+        
+        // Verificar se todos os campos obrigatórios estão preenchidos
+        const requiredFields = batchContainer.querySelectorAll('select[required], input[required]');
+        let isValid = true;
+        
+        requiredFields.forEach(field => {
+            if (!field.value) {
+                isValid = false;
+                field.classList.add('is-invalid');
+            } else {
+                field.classList.remove('is-invalid');
+            }
+        });
+        
+        if (!isValid) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro',
+                text: 'Preencha todos os campos obrigatórios',
+                confirmButtonColor: '#fec32e'
+            });
+            return;
+        }
+        
+        // Serializar o formulário
+        const formData = new FormData(batchForm);
+        
+        // Adicionar informação sobre quantas entradas existem
+        formData.append('entry_count', entries.length);
+        
+        // Enviar via fetch API
+        fetch(batchForm.action + '?date={{ date }}', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Sucesso',
+                    text: data.message,
+                    confirmButtonColor: '#fec32e'
+                }).then(() => {
+                    // Recarregar a página mantendo a data
+                    window.location.href = window.location.href;
+                });
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro',
+                    text: data.message,
+                    confirmButtonColor: '#fec32e'
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao salvar movimentações:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro',
+                text: 'Ocorreu um erro ao salvar as movimentações',
+                confirmButtonColor: '#fec32e'
+            });
+        });
+    });
+});
+</script>
+{% endif %}
 {% endblock %}

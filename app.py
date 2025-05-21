@@ -1304,6 +1304,47 @@ def user_cashiers(unit_id):
     monthly_base = cursor.fetchone()
     base_amount = monthly_base['amount'] if monthly_base else 0
     
+    # Se não existir valor base para o mês atual, pegar do mês anterior
+    if not monthly_base:
+        prev_month = today.month - 1 if today.month > 1 else 12
+        prev_year = today.year if today.month > 1 else today.year - 1
+        
+        cursor.execute(
+            "SELECT amount FROM monthly_base_amount WHERE unit_id = %s AND month = %s AND year = %s",
+            (unit_id, prev_month, prev_year)
+        )
+        prev_base = cursor.fetchone()
+        if prev_base:
+            base_amount = prev_base['amount']
+            # Criar registro para o mês atual com o valor do mês anterior
+            cursor.execute(
+                "INSERT INTO monthly_base_amount (unit_id, month, year, amount) VALUES (%s, %s, %s, %s)",
+                (unit_id, today.month, today.year, base_amount)
+            )
+            conn.commit()
+    
+    # Calcular saldo acumulado de dinheiro e PIX (valor base do mês)
+    cursor.execute(
+        """
+        SELECT SUM(
+            CASE 
+                WHEN m.type = 'entrada' AND pm.category IN ('dinheiro', 'pix') THEN m.amount
+                WHEN m.type IN ('saida', 'despesa_loja') AND pm.category IN ('dinheiro', 'pix') THEN -m.amount
+                ELSE 0
+            END
+        ) as saldo_dinheiro
+        FROM movement m
+        JOIN payment_method pm ON m.payment_method = pm.id
+        WHERE m.cashier_id IN (SELECT id FROM cashier WHERE unit_id = %s)
+        """,
+        (unit_id,)
+    )
+    saldo_result = cursor.fetchone()
+    saldo_acumulado = saldo_result['saldo_dinheiro'] if saldo_result['saldo_dinheiro'] else 0
+    
+    # Valor base atualizado (base inicial + movimentações de dinheiro/PIX)
+    base_amount_atual = base_amount + saldo_acumulado
+    
     # Obter o controle de moedas
     cursor.execute("SELECT * FROM coins_control WHERE unit_id = %s", (unit_id,))
     coins_control = cursor.fetchone()
@@ -1325,11 +1366,31 @@ def user_cashiers(unit_id):
     # Obter totais de movimentos do dia para cada caixa
     start_date = datetime(today.year, today.month, today.day, 0, 0, 0)
     end_date = datetime(today.year, today.month, today.day, 23, 59, 59)
+    today_date = today.date()
     
     cashier_totals = {}
     for cashier in cashiers:
+        # Atualizar status do caixa baseado em movimentações
         cursor.execute(
-            "SELECT SUM(CASE WHEN type = 'entrada' AND payment_status = 'realizado' THEN amount ELSE 0 END) as total_entrada, "
+            "SELECT COUNT(*) as count FROM movement WHERE cashier_id = %s AND created_at BETWEEN %s AND %s",
+            (cashier['id'], start_date, end_date)
+        )
+        mov_count = cursor.fetchone()
+        
+        # Se não tem movimentação, o caixa está fechado (exceto caixa financeiro)
+        if cashier['number'] > 0:
+            new_status = 'aberto' if mov_count['count'] > 0 else 'fechado'
+            if cashier['status'] != new_status:
+                cursor.execute(
+                    "UPDATE cashier SET status = %s WHERE id = %s",
+                    (new_status, cashier['id'])
+                )
+                conn.commit()
+                cashier['status'] = new_status
+        
+        # Obter totais
+        cursor.execute(
+            "SELECT SUM(CASE WHEN type = 'entrada' THEN amount ELSE 0 END) as total_entrada, "
             "SUM(CASE WHEN type = 'saida' OR type = 'despesa_loja' OR type = 'estorno' THEN amount ELSE 0 END) as total_saida "
             "FROM movement "
             "WHERE cashier_id = %s AND created_at BETWEEN %s AND %s",
@@ -1350,7 +1411,7 @@ def user_cashiers(unit_id):
     
     # Obter totais gerais
     cursor.execute(
-        "SELECT SUM(CASE WHEN type = 'entrada' AND payment_status = 'realizado' THEN amount ELSE 0 END) as total_entrada, "
+        "SELECT SUM(CASE WHEN type = 'entrada' THEN amount ELSE 0 END) as total_entrada, "
         "SUM(CASE WHEN type = 'saida' OR type = 'despesa_loja' OR type = 'estorno' THEN amount ELSE 0 END) as total_saida "
         "FROM movement "
         "WHERE cashier_id IN (SELECT id FROM cashier WHERE unit_id = %s) "
@@ -1363,9 +1424,19 @@ def user_cashiers(unit_id):
     total_saida = totals['total_saida'] or 0
     saldo_dia = total_entrada - total_saida
     
+    # Obter somatório de todos os Z do dia
+    cursor.execute(
+        "SELECT SUM(z_value) as total_z FROM pdv_z_values "
+        "WHERE cashier_id IN (SELECT id FROM cashier WHERE unit_id = %s) "
+        "AND date = %s",
+        (unit_id, today_date)
+    )
+    z_result = cursor.fetchone()
+    total_z = z_result['total_z'] if z_result and z_result['total_z'] else 0
+    
     # Calcular saldo do caixa financeiro
     cursor.execute(
-        "SELECT SUM(CASE WHEN type = 'entrada' AND payment_status = 'realizado' THEN amount ELSE 0 END) as total_entrada, "
+        "SELECT SUM(CASE WHEN type = 'entrada' THEN amount ELSE 0 END) as total_entrada, "
         "SUM(CASE WHEN type = 'saida' OR type = 'despesa_loja' OR type = 'estorno' THEN amount ELSE 0 END) as total_saida "
         "FROM movement "
         "WHERE cashier_id IN (SELECT id FROM cashier WHERE unit_id = %s)",
@@ -1388,10 +1459,11 @@ def user_cashiers(unit_id):
         total_entrada=total_entrada,
         total_saida=total_saida,
         saldo_dia=saldo_dia,
-        base_amount=base_amount,
+        base_amount=base_amount_atual,
         coins_amount=coins_amount,
         financial_balance=financial_balance,
-        financial_cashier_id=financial_cashier_id
+        financial_cashier_id=financial_cashier_id,
+        total_z=total_z
     )
 
 @app.route('/user/unit/<int:unit_id>/cashier/<int:cashier_id>/movements', methods=['GET', 'POST'])
@@ -1440,24 +1512,29 @@ def user_movements(unit_id, cashier_id):
     # Verificar se é o Caixa Financeiro (número 0)
     is_financial_cashier = cashier['number'] == 0
     
-    # Obter data para filtrar movimentos
-    date_str = request.args.get('date')
+    # Obter data para filtrar movimentos - CORREÇÃO: usar POST se disponível
+    if request.method == 'POST' and 'date_filter' in request.form:
+        date_str = request.form.get('date_filter')
+    else:
+        date_str = request.args.get('date')
+    
     if date_str:
         try:
             date_obj = datetime.strptime(date_str, '%Y-%m-%d')
         except ValueError:
-            date_obj = get_brazil_datetime()  # Usando horário do Brasil
+            date_obj = get_brazil_datetime()
     else:
-        date_obj = get_brazil_datetime()  # Usando horário do Brasil
+        date_obj = get_brazil_datetime()
     
     # Formatar a data para uso no template
     date_formatted = date_obj.strftime('%Y-%m-%d')
     
-    # Obter movimentos do dia
+    # Definir período do dia
     start_date = datetime(date_obj.year, date_obj.month, date_obj.day, 0, 0, 0)
     end_date = datetime(date_obj.year, date_obj.month, date_obj.day, 23, 59, 59)
     date_obj_date = date_obj.date()
     
+    # Obter movimentos do dia
     cursor.execute(
         "SELECT m.*, pm.name as payment_method_name, pm.category as payment_method_category "
         "FROM movement m "
@@ -1490,6 +1567,39 @@ def user_movements(unit_id, cashier_id):
     monthly_base = cursor.fetchone()
     base_amount = monthly_base['amount'] if monthly_base else 0
     
+    # Se não existir valor base para o mês atual, pegar do mês anterior
+    if not monthly_base:
+        prev_month = date_obj.month - 1 if date_obj.month > 1 else 12
+        prev_year = date_obj.year if date_obj.month > 1 else date_obj.year - 1
+        
+        cursor.execute(
+            "SELECT amount FROM monthly_base_amount WHERE unit_id = %s AND month = %s AND year = %s",
+            (unit_id, prev_month, prev_year)
+        )
+        prev_base = cursor.fetchone()
+        if prev_base:
+            base_amount = prev_base['amount']
+    
+    # Calcular saldo acumulado de dinheiro e PIX
+    cursor.execute(
+        """
+        SELECT SUM(
+            CASE 
+                WHEN m.type = 'entrada' AND pm.category IN ('dinheiro', 'pix') THEN m.amount
+                WHEN m.type IN ('saida', 'despesa_loja') AND pm.category IN ('dinheiro', 'pix') THEN -m.amount
+                ELSE 0
+            END
+        ) as saldo_dinheiro
+        FROM movement m
+        JOIN payment_method pm ON m.payment_method = pm.id
+        WHERE m.cashier_id IN (SELECT id FROM cashier WHERE unit_id = %s)
+        AND m.created_at < %s
+        """,
+        (unit_id, start_date)
+    )
+    saldo_anterior = cursor.fetchone()
+    saldo_dinheiro_anterior = saldo_anterior['saldo_dinheiro'] if saldo_anterior['saldo_dinheiro'] else 0
+    
     # Obter valor base específico para este caixa
     cursor.execute(
         "SELECT amount FROM cashier_base_values WHERE cashier_id = %s AND month = %s AND year = %s",
@@ -1498,21 +1608,13 @@ def user_movements(unit_id, cashier_id):
     cashier_base_result = cursor.fetchone()
     cashier_base_amount = cashier_base_result['amount'] if cashier_base_result else 0
     
-    # Campo "devo" (devoluções/cancelamentos)
-    cursor.execute(
-        "SELECT SUM(devo_value) as total_devo FROM devo_values WHERE cashier_id = %s AND date = %s",
-        (cashier_id, date_obj_date)
-    )
-    devo_result = cursor.fetchone()
-    devo_total = devo_result['total_devo'] if devo_result and devo_result['total_devo'] else 0
-    
-    # Calcular vendas totais do dia (Campo T)
+    # Calcular vendas totais do dia para ESTE CAIXA
     cursor.execute(
         "SELECT SUM(amount) as total_t FROM movement WHERE cashier_id = %s AND type = 'entrada' AND payment_status = 'realizado' AND created_at BETWEEN %s AND %s",
         (cashier_id, start_date, end_date)
     )
     t_result = cursor.fetchone()
-    t_total = (t_result['total_t'] if t_result and t_result['total_t'] else 0) - devo_total
+    t_total = t_result['total_t'] if t_result and t_result['total_t'] else 0
     
     # Obter valor Z (relatório do PDV)
     cursor.execute(
@@ -1534,153 +1636,107 @@ def user_movements(unit_id, cashier_id):
     
     # Para o formulário de adição de movimentos
     if request.method == 'POST':
-        # Se for uma atualização do valor "devo"
-        if 'devo_value' in request.form:
-            devo_value = float(request.form.get('devo_value', 0))
-            reason = request.form.get('devo_reason', '')
-            
-            cursor.execute(
-                "INSERT INTO devo_values (cashier_id, devo_value, date, reason) VALUES (%s, %s, %s, %s) "
-                "ON DUPLICATE KEY UPDATE devo_value = %s, reason = %s",
-                (cashier_id, devo_value, date_obj_date, reason, devo_value, reason)
-            )
-            conn.commit()
-            
-            flash('Valor de cancelamento registrado com sucesso!', 'success')
-            return redirect(url_for('user_movements', unit_id=unit_id, cashier_id=cashier_id, date=date_formatted))
-        
-        # Se for uma atualização do valor Z
-        elif 'z_value' in request.form:
-            z_value = float(request.form.get('z_value', 0))
-            
-            cursor.execute(
-                "INSERT INTO pdv_z_values (cashier_id, z_value, date) VALUES (%s, %s, %s) "
-                "ON DUPLICATE KEY UPDATE z_value = %s",
-                (cashier_id, z_value, date_obj_date, z_value)
-            )
-            conn.commit()
-            
-            flash('Valor Z atualizado com sucesso!', 'success')
-            return redirect(url_for('user_movements', unit_id=unit_id, cashier_id=cashier_id, date=date_formatted))
-        
-        # Se for uma atualização do pote
-        elif 'pot_amount' in request.form:
-            amount = float(request.form.get('pot_amount', 0))
-            
-            cursor.execute(
-                "INSERT INTO pot_control (unit_id, amount) VALUES (%s, %s) "
-                "ON DUPLICATE KEY UPDATE amount = %s",
-                (unit_id, amount, amount)
-            )
-            conn.commit()
-            
-            flash('Valor do Pote atualizado com sucesso!', 'success')
-            return redirect(url_for('user_movements', unit_id=unit_id, cashier_id=cashier_id, date=date_formatted))
-        
-        # Caso padrão: registro de movimentação
-        movement_type = request.form.get('type')
-        amount = float(request.form.get('amount'))
-        payment_method_id = request.form.get('payment_method')
-        description = request.form.get('description', '')
-        payment_status = request.form.get('payment_status', 'realizado')
-        
-        # Para o Caixa Financeiro - tratamento especial para entradas
-        if is_financial_cashier and movement_type == 'entrada':
-            entry_type = request.form.get('entry_type', 'dinheiro')
-            description = f"{entry_type.capitalize()}: {description}"
-        
-        # Para despesas da loja, obter a categoria
-        expense_category_id = None
-        if movement_type == 'despesa_loja':
-            expense_category_id = request.form.get('expense_category')
-            if not expense_category_id:
-                cursor.close()
-                conn.close()
-                flash('Categoria de despesa é obrigatória!', 'error')
-                return redirect(url_for('user_movements', unit_id=unit_id, cashier_id=cashier_id, date=date_formatted))
-        
-        # Para estorno, o status sempre é realizado
-        if movement_type == 'estorno':
-            payment_status = 'realizado'
-        
-        # Valores padrão para campos específicos
-        coins_in = float(request.form.get('coins_in') or 0)
-        coins_out = float(request.form.get('coins_out') or 0)
-        
-        # Removidos os campos client_name e document_number conforme solicitado
-        
-        try:
-            # CORREÇÃO: Usar a data selecionada pelo usuário mantendo a hora atual (sem substituir a data)
-            current_brazil_time = get_brazil_datetime().time()
-            movement_datetime = datetime.combine(date_obj_date, current_brazil_time)
-            
-            # Inserir movimento com a data selecionada
-            cursor.execute(
-                "INSERT INTO movement "
-                "(cashier_id, type, amount, payment_method, description, payment_status, "
-                "coins_in, coins_out, created_at) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                (cashier_id, movement_type, amount, payment_method_id, description, 
-                 payment_status, coins_in, coins_out, movement_datetime)
-            )
-            movement_id = cursor.lastrowid
-            
-            # Se for despesa da loja, registrar na tabela específica
-            if movement_type == 'despesa_loja' and expense_category_id:
-                cursor.execute(
-                    "INSERT INTO store_expense (movement_id, category_id, description) "
-                    "VALUES (%s, %s, %s)",
-                    (movement_id, expense_category_id, description)
-                )
-            
-            # Se for dinheiro (moedas), atualizar o controle de moedas
-            if payment_method_id and (coins_in > 0 or coins_out > 0):
-                cursor.execute("SELECT category FROM payment_method WHERE id = %s", (payment_method_id,))
-                payment_method = cursor.fetchone()
+        # Preservar a data selecionada
+        if 'date_filter' not in request.form:
+            # Se for uma atualização do valor Z
+            if 'z_value' in request.form:
+                z_value = float(request.form.get('z_value', 0))
                 
-                if payment_method and payment_method['category'] == 'dinheiro':
-                    # Verificar se já existe controle de moedas para esta unidade
-                    cursor.execute("SELECT * FROM coins_control WHERE unit_id = %s", (unit_id,))
-                    coins_control = cursor.fetchone()
+                cursor.execute(
+                    "INSERT INTO pdv_z_values (cashier_id, z_value, date) VALUES (%s, %s, %s) "
+                    "ON DUPLICATE KEY UPDATE z_value = %s",
+                    (cashier_id, z_value, date_obj_date, z_value)
+                )
+                conn.commit()
+                
+                flash('Valor Z atualizado com sucesso!', 'success')
+                return redirect(url_for('user_movements', unit_id=unit_id, cashier_id=cashier_id, date=date_formatted))
+            
+            # Se for uma atualização do pote
+            elif 'pot_amount' in request.form:
+                amount = float(request.form.get('pot_amount', 0))
+                
+                cursor.execute(
+                    "INSERT INTO pot_control (unit_id, amount) VALUES (%s, %s) "
+                    "ON DUPLICATE KEY UPDATE amount = %s",
+                    (unit_id, amount, amount)
+                )
+                conn.commit()
+                
+                flash('Valor do Pote atualizado com sucesso!', 'success')
+                return redirect(url_for('user_movements', unit_id=unit_id, cashier_id=cashier_id, date=date_formatted))
+            
+            # Caso padrão: registro de movimentação
+            else:
+                movement_type = request.form.get('type')
+                amount = float(request.form.get('amount'))
+                payment_method_id = request.form.get('payment_method')
+                description = request.form.get('description', '')
+                
+                # Para o Caixa Financeiro - só permite saídas e despesas
+                if is_financial_cashier and movement_type == 'entrada':
+                    flash('O Caixa Financeiro só permite saídas e despesas!', 'error')
+                    return redirect(url_for('user_movements', unit_id=unit_id, cashier_id=cashier_id, date=date_formatted))
+                
+                # Para caixas normais - só permite entradas e estornos
+                if not is_financial_cashier and movement_type in ['saida', 'despesa_loja']:
+                    flash('Este caixa só permite entradas e estornos!', 'error')
+                    return redirect(url_for('user_movements', unit_id=unit_id, cashier_id=cashier_id, date=date_formatted))
+                
+                # Para despesas da loja, obter a categoria
+                expense_category_id = None
+                if movement_type == 'despesa_loja':
+                    expense_category_id = request.form.get('expense_category')
+                    if not expense_category_id:
+                        cursor.close()
+                        conn.close()
+                        flash('Categoria de despesa é obrigatória!', 'error')
+                        return redirect(url_for('user_movements', unit_id=unit_id, cashier_id=cashier_id, date=date_formatted))
+                
+                # Valores padrão para campos específicos
+                coins_in = float(request.form.get('coins_in') or 0)
+                coins_out = float(request.form.get('coins_out') or 0)
+                
+                try:
+                    # IMPORTANTE: Usar a data selecionada com a hora atual
+                    current_brazil_time = get_brazil_datetime().time()
+                    movement_datetime = datetime.combine(date_obj_date, current_brazil_time)
                     
-                    if not coins_control:
-                        # Criar um novo controle
+                    # Inserir movimento com a data correta
+                    cursor.execute(
+                        "INSERT INTO movement "
+                        "(cashier_id, type, amount, payment_method, description, payment_status, "
+                        "coins_in, coins_out, created_at) "
+                        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                        (cashier_id, movement_type, amount, payment_method_id, description, 
+                         'realizado', coins_in, coins_out, movement_datetime)
+                    )
+                    movement_id = cursor.lastrowid
+                    
+                    # Se for despesa da loja, registrar na tabela específica
+                    if movement_type == 'despesa_loja' and expense_category_id:
                         cursor.execute(
-                            "INSERT INTO coins_control (unit_id, total_amount) VALUES (%s, %s)",
-                            (unit_id, coins_in - coins_out)
+                            "INSERT INTO store_expense (movement_id, category_id, description) "
+                            "VALUES (%s, %s, %s)",
+                            (movement_id, expense_category_id, description)
                         )
-                    else:
-                        # Converter para decimal para evitar o erro de tipo
-                        from decimal import Decimal
-                        new_total = coins_control['total_amount'] + Decimal(str(coins_in)) - Decimal(str(coins_out))
-                        cursor.execute(
-                            "UPDATE coins_control SET total_amount = %s, updated_at = %s WHERE id = %s",
-                            (new_total, get_brazil_datetime(), coins_control['id'])
-                        )
-                        
-                        # Registrar no histórico se houver mudança
-                        if coins_in > 0 or coins_out > 0:
-                            cursor.execute(
-                                "INSERT INTO coins_history (unit_id, amount, action) VALUES (%s, %s, %s)",
-                                (unit_id, coins_in - coins_out, 'add')
-                            )
-            
-            conn.commit()
-            flash('Movimentação registrada com sucesso!', 'success')
-            return redirect(url_for('user_movements', unit_id=unit_id, cashier_id=cashier_id, date=date_formatted))
-            
-        except Exception as e:
-            conn.rollback()
-            flash(f'Erro ao registrar movimentação: {str(e)}', 'error')
+                    
+                    conn.commit()
+                    flash('Movimentação registrada com sucesso!', 'success')
+                    return redirect(url_for('user_movements', unit_id=unit_id, cashier_id=cashier_id, date=date_formatted))
+                    
+                except Exception as e:
+                    conn.rollback()
+                    flash(f'Erro ao registrar movimentação: {str(e)}', 'error')
     
-    # Calcular saldos e totais
+    # Calcular saldos e totais para ESTE CAIXA
     total_entrada = 0
     total_saida = 0
     total_estorno = 0
     total_despesa = 0
     
     for mov in movements:
-        if mov['type'] == 'entrada' and mov['payment_status'] == 'realizado':
+        if mov['type'] == 'entrada':
             total_entrada += mov['amount']
         elif mov['type'] == 'saida':
             total_saida += mov['amount']
@@ -1689,27 +1745,78 @@ def user_movements(unit_id, cashier_id):
         elif mov['type'] == 'despesa_loja':
             total_despesa += mov['amount']
     
-    # Obter o saldo do caixa financeiro
+    # Se for caixa financeiro, obter totais de TODOS os caixas
+    if is_financial_cashier:
+        cursor.execute(
+            """
+            SELECT 
+                SUM(CASE WHEN type = 'entrada' THEN amount ELSE 0 END) as total_entrada,
+                SUM(CASE WHEN type = 'saida' THEN amount ELSE 0 END) as total_saida,
+                SUM(CASE WHEN type = 'estorno' THEN amount ELSE 0 END) as total_estorno,
+                SUM(CASE WHEN type = 'despesa_loja' THEN amount ELSE 0 END) as total_despesa
+            FROM movement
+            WHERE cashier_id IN (SELECT id FROM cashier WHERE unit_id = %s)
+            AND created_at BETWEEN %s AND %s
+            """,
+            (unit_id, start_date, end_date)
+        )
+        totals_all = cursor.fetchone()
+        
+        total_entrada_all = totals_all['total_entrada'] or 0
+        total_saida_all = totals_all['total_saida'] or 0
+        total_estorno_all = totals_all['total_estorno'] or 0
+        total_despesa_all = totals_all['total_despesa'] or 0
+        
+        # Obter lista de todos os estornos do dia
+        cursor.execute(
+            """
+            SELECT m.*, c.number as cashier_number, pm.name as payment_method_name
+            FROM movement m
+            JOIN cashier c ON m.cashier_id = c.id
+            LEFT JOIN payment_method pm ON m.payment_method = pm.id
+            WHERE c.unit_id = %s AND m.type = 'estorno'
+            AND m.created_at BETWEEN %s AND %s
+            ORDER BY m.created_at DESC
+            """,
+            (unit_id, start_date, end_date)
+        )
+        all_estornos = cursor.fetchall()
+    else:
+        total_entrada_all = total_entrada
+        total_saida_all = total_saida
+        total_estorno_all = total_estorno
+        total_despesa_all = total_despesa
+        all_estornos = []
+    
+    # Calcular saldo de dinheiro em caixa do dia (dinheiro + PIX)
     cursor.execute(
-        "SELECT SUM(CASE WHEN type = 'entrada' AND payment_status = 'realizado' THEN amount ELSE 0 END) as total_entrada, "
-        "SUM(CASE WHEN type = 'saida' OR type = 'despesa_loja' OR type = 'estorno' THEN amount ELSE 0 END) as total_saida "
-        "FROM movement "
-        "WHERE cashier_id IN (SELECT id FROM cashier WHERE unit_id = %s) "
-        "AND created_at BETWEEN %s AND %s",
+        """
+        SELECT SUM(
+            CASE 
+                WHEN m.type = 'entrada' AND pm.category IN ('dinheiro', 'pix') THEN m.amount
+                WHEN m.type IN ('saida', 'despesa_loja') AND pm.category IN ('dinheiro', 'pix') THEN -m.amount
+                ELSE 0
+            END
+        ) as saldo_dinheiro_dia
+        FROM movement m
+        JOIN payment_method pm ON m.payment_method = pm.id
+        WHERE m.cashier_id IN (SELECT id FROM cashier WHERE unit_id = %s)
+        AND m.created_at BETWEEN %s AND %s
+        """,
         (unit_id, start_date, end_date)
     )
-    financial_result = cursor.fetchone()
+    saldo_dia = cursor.fetchone()
+    saldo_dinheiro_dia = saldo_dia['saldo_dinheiro_dia'] if saldo_dia['saldo_dinheiro_dia'] else 0
     
-    financial_balance = 0
-    if financial_result:
-        financial_balance = (financial_result['total_entrada'] or 0) - (financial_result['total_saida'] or 0)
+    # Saldo total em caixa (base + anterior + dia)
+    saldo_caixa_total = base_amount + saldo_dinheiro_anterior + saldo_dinheiro_dia
     
-    # Obter saldos de cartões do dia para exibir no resumo
+    # Obter saldos por categoria de pagamento
     cursor.execute(
         "SELECT pm.category, SUM(m.amount) as total "
         "FROM movement m "
         "JOIN payment_method pm ON m.payment_method = pm.id "
-        "WHERE m.cashier_id = %s AND m.type = 'entrada' AND m.payment_status = 'realizado' "
+        "WHERE m.cashier_id = %s AND m.type = 'entrada' "
         "AND m.created_at BETWEEN %s AND %s "
         "GROUP BY pm.category",
         (cashier_id, start_date, end_date)
@@ -1720,13 +1827,11 @@ def user_movements(unit_id, cashier_id):
     for result in payment_results:
         payment_category_totals[result['category']] = result['total']
     
-    # Obter dados de moedas
-    cursor.execute("SELECT total_amount FROM coins_control WHERE unit_id = %s", (unit_id,))
-    coins_result = cursor.fetchone()
-    coins_total = coins_result['total_amount'] if coins_result else 0
-    
     cursor.close()
     conn.close()
+    
+    # Calcular saldo líquido do dia (considerando despesas)
+    saldo_liquido_dia = total_entrada_all - total_estorno_all - total_despesa_all - total_saida_all
     
     return render_template(
         'user/movements.html',
@@ -1741,17 +1846,22 @@ def user_movements(unit_id, cashier_id):
         total_saida=total_saida,
         total_estorno=total_estorno,
         total_despesa=total_despesa,
-        financial_balance=financial_balance,
+        total_entrada_all=total_entrada_all,
+        total_saida_all=total_saida_all,
+        total_estorno_all=total_estorno_all,
+        total_despesa_all=total_despesa_all,
+        saldo_liquido_dia=saldo_liquido_dia,
         base_amount=base_amount,
         cashier_base_amount=cashier_base_amount,
-        devo_total=devo_total,
         t_total=t_total,
         z_total=z_total,
         dif_total=dif_total,
         pot_amount=pot_amount,
         is_financial_cashier=is_financial_cashier,
         payment_category_totals=payment_category_totals,
-        coins_total=coins_total
+        saldo_caixa_total=saldo_caixa_total,
+        saldo_dinheiro_dia=saldo_dinheiro_dia,
+        all_estornos=all_estornos
     )
 
 @app.route('/user/profile', methods=['GET', 'POST'])

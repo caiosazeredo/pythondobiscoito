@@ -13,11 +13,11 @@
     </div>
     
     <div class="row mb-4">
-        <div class="col-md-6 offset-md-3">
+        <div class="col-md-8 offset-md-2">
             <form method="post" class="card shadow-sm">
                 <div class="card-body">
                     <div class="row g-3">
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label for="year" class="form-label">Ano</label>
                             <select name="year" id="year" class="form-select">
                                 {% for y in range(year-2, year+1) %}
@@ -25,7 +25,7 @@
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label for="month" class="form-label">Mês</label>
                             <select name="month" id="month" class="form-select">
                                 <option value="all" {% if month == 'all' %}selected{% endif %}>Todos os Meses</option>
@@ -34,7 +34,14 @@
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="col-md-4 d-flex align-items-end">
+                        <div class="col-md-3">
+                            <label for="margin" class="form-label">Margem de Lucro (%)</label>
+                            <div class="input-group">
+                                <input type="number" name="margin" id="margin" class="form-control" value="{{ margin }}" min="0" max="100" step="0.1">
+                                <span class="input-group-text">%</span>
+                            </div>
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end">
                             <button type="submit" class="btn btn-warning w-100">Filtrar</button>
                         </div>
                     </div>
@@ -42,6 +49,17 @@
             </form>
         </div>
     </div>
+    
+    {% if margin > 0 %}
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle-fill me-2"></i>
+                <strong>Nota:</strong> Os valores de lucro exibidos consideram a margem de {{ "%.1f"|format(margin) }}% aplicada sobre o faturamento.
+            </div>
+        </div>
+    </div>
+    {% endif %}
     
     <div class="row mb-4">
         <div class="col-md-12">
@@ -292,49 +310,33 @@
                         </h3>
                     </div>
                     
-                    <h6 class="mb-3">Recomendações Detalhadas:</h6>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="card mb-3">
-                                <div class="card-body">
-                                    <h6><i class="bi bi-gear-fill me-2 text-warning"></i> Revisar estrutura de custos</h6>
-                                    <p class="small text-muted mb-0">Analise os principais componentes de custo desta unidade, identificando itens com valores discrepantes em comparação com outras unidades. Foque em redução de gastos desnecessários e negocie com fornecedores.</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="card mb-3">
-                                <div class="card-body">
-                                    <h6><i class="bi bi-calendar-check me-2 text-warning"></i> Analisar despesas fixas</h6>
-                                    <p class="small text-muted mb-0">Avalie as despesas fixas mensais como aluguel, água, luz e internet. Busque oportunidades de redução ou renegociação destes valores. Compare estes custos com outras unidades de perfil similar.</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="card mb-3">
-                                <div class="card-body">
-                                    <h6><i class="bi bi-speedometer2 me-2 text-warning"></i> Verificar eficiência operacional</h6>
-                                    <p class="small text-muted mb-0">Analise o quadro de funcionários, processos de produção e atendimento. Identifique gargalos e implemente melhorias para aumentar a produtividade. Considere realizar treinamentos específicos.</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="card mb-3">
-                                <div class="card-body">
-                                    <h6><i class="bi bi-cart-check me-2 text-warning"></i> Avaliar mix de produtos</h6>
-                                    <p class="small text-muted mb-0">Verifique quais produtos têm maior margem de lucro e promova-os mais ativamente. Considere ajustar o foco para itens de maior rentabilidade e avaliar a possibilidade de novos produtos com margens melhores.</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <h6 class="mb-3">Recomendações:</h6>
+                    <ul class="list-unstyled">
+                        <li class="mb-2">
+                            <i class="bi bi-check-circle-fill text-warning me-2"></i>
+                            Revisar estrutura de custos
+                        </li>
+                        <li class="mb-2">
+                            <i class="bi bi-check-circle-fill text-warning me-2"></i>
+                            Analisar despesas fixas
+                        </li>
+                        <li class="mb-2">
+                            <i class="bi bi-check-circle-fill text-warning me-2"></i>
+                            Verificar eficiência operacional
+                        </li>
+                        <li class="mb-2">
+                            <i class="bi bi-check-circle-fill text-warning me-2"></i>
+                            Avaliar mix de produtos
+                        </li>
+                    </ul>
                     
                     {% if lowest_margin.profit_margin >= 15 %}
                     <div class="alert alert-success mt-3">
-                        <i class="bi bi-check-circle-fill me-2"></i> Esta unidade já possui boas margens de lucro, mas estas ações podem melhorar ainda mais seu desempenho.
+                        <i class="bi bi-check-circle-fill me-2"></i> Esta unidade já possui boas margens de lucro.
                     </div>
                     {% else %}
                     <div class="alert alert-warning mt-3">
-                        <i class="bi bi-exclamation-triangle-fill me-2"></i> As recomendações acima devem ser priorizadas para melhorar significativamente a rentabilidade desta unidade.
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i> Priorize as ações acima para melhorar a rentabilidade.
                     </div>
                     {% endif %}
                     

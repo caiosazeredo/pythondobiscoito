@@ -480,16 +480,18 @@ def expenses_report():
     start_datetime = datetime.combine(start_date, datetime.min.time())
     end_datetime = datetime.combine(end_date, datetime.max.time())
     
-    # Consulta base para despesas
+    # Consulta para despesas - CORRIGIDA
     base_query = """
-        SELECT se.id, se.description, se.created_at, ec.name as category_name, ec.type as category_type,
-               m.amount, u.name as unit_name, u.id as unit_id
-        FROM store_expense se
-        JOIN movement m ON se.movement_id = m.id
-        JOIN expense_category ec ON se.category_id = ec.id
+        SELECT m.id, m.description, m.created_at, m.amount,
+               ec.name as category_name, ec.type as category_type,
+               u.name as unit_name, u.id as unit_id
+        FROM movement m
         JOIN cashier c ON m.cashier_id = c.id
         JOIN unit u ON c.unit_id = u.id
-        WHERE m.created_at BETWEEN %s AND %s
+        LEFT JOIN store_expense se ON m.id = se.movement_id
+        LEFT JOIN expense_category ec ON se.category_id = ec.id
+        WHERE m.type = 'despesa_loja'
+        AND m.created_at BETWEEN %s AND %s
     """
     
     params = [start_datetime, end_datetime]
@@ -504,7 +506,7 @@ def expenses_report():
         base_query += " AND ec.type = %s"
         params.append(category_type)
     
-    base_query += " ORDER BY se.created_at DESC"
+    base_query += " ORDER BY m.created_at DESC"
     
     cursor.execute(base_query, params)
     expenses = cursor.fetchall()
@@ -512,22 +514,24 @@ def expenses_report():
     # Calcular totais por categoria
     totals_by_category = {}
     for expense in expenses:
-        cat_key = expense['category_name']
-        if cat_key not in totals_by_category:
-            totals_by_category[cat_key] = {
-                'name': expense['category_name'],
-                'type': expense['category_type'],
-                'total': 0
-            }
-        totals_by_category[cat_key]['total'] += expense['amount']
+        if expense['category_name']:
+            cat_key = expense['category_name']
+            if cat_key not in totals_by_category:
+                totals_by_category[cat_key] = {
+                    'name': expense['category_name'],
+                    'type': expense['category_type'],
+                    'total': 0
+                }
+            totals_by_category[cat_key]['total'] += expense['amount']
     
     # Calcular totais por tipo de categoria
     totals_by_type = {}
     for expense in expenses:
-        type_key = expense['category_type']
-        if type_key not in totals_by_type:
-            totals_by_type[type_key] = 0
-        totals_by_type[type_key] += expense['amount']
+        if expense['category_type']:
+            type_key = expense['category_type']
+            if type_key not in totals_by_type:
+                totals_by_type[type_key] = 0
+            totals_by_type[type_key] += expense['amount']
     
     # Calcular total geral
     total_expenses = sum(expense['amount'] for expense in expenses)
@@ -539,7 +543,7 @@ def expenses_report():
             "SELECT SUM(m.amount) as total "
             "FROM movement m "
             "JOIN cashier c ON m.cashier_id = c.id "
-            "WHERE c.unit_id = %s AND m.type = 'entrada' AND m.payment_status = 'realizado' "
+            "WHERE c.unit_id = %s AND m.type = 'entrada' "
             "AND m.created_at BETWEEN %s AND %s",
             (unit_id, start_datetime, end_datetime)
         )
@@ -549,7 +553,7 @@ def expenses_report():
         cursor.execute(
             "SELECT SUM(m.amount) as total "
             "FROM movement m "
-            "WHERE m.type = 'entrada' AND m.payment_status = 'realizado' "
+            "WHERE m.type = 'entrada' "
             "AND m.created_at BETWEEN %s AND %s",
             (start_datetime, end_datetime)
         )
@@ -1124,9 +1128,11 @@ def profitability_report():
     if request.method == 'POST':
         year = int(request.form.get('year', datetime.now().year))
         month = int(request.form.get('month', datetime.now().month)) if request.form.get('month') != 'all' else 'all'
+        margin = float(request.form.get('margin', 0))  # Nova linha para margem
     else:
         year = int(request.args.get('year', datetime.now().year))
         month = int(request.args.get('month', datetime.now().month)) if request.args.get('month') != 'all' else 'all'
+        margin = float(request.args.get('margin', 0))  # Nova linha para margem
     
     # Definir período de consulta
     if month == 'all':
@@ -1151,7 +1157,7 @@ def profitability_report():
             "SELECT SUM(m.amount) as revenue "
             "FROM movement m "
             "JOIN cashier c ON m.cashier_id = c.id "
-            "WHERE c.unit_id = %s AND m.type = 'entrada' AND m.payment_status = 'realizado' "
+            "WHERE c.unit_id = %s AND m.type = 'entrada' "
             "AND m.created_at BETWEEN %s AND %s",
             (unit['id'], start_datetime, end_datetime)
         )
@@ -1182,8 +1188,16 @@ def profitability_report():
         refunds_result = cursor.fetchone()
         refunds = refunds_result['refunds'] if refunds_result and refunds_result['refunds'] else 0
         
-        # Calcular lucro e margem
-        profit = revenue - expenses - refunds
+        # Aplicar margem sobre o faturamento
+        if margin > 0:
+            # Calcular o custo estimado baseado na margem
+            estimated_cost = revenue * (1 - margin / 100)
+            # Lucro considerando a margem
+            profit = revenue - estimated_cost - expenses - refunds
+        else:
+            # Cálculo tradicional sem margem
+            profit = revenue - expenses - refunds
+        
         profit_margin = (profit / revenue * 100) if revenue > 0 else 0
         
         profitability_data.append({
@@ -1192,7 +1206,8 @@ def profitability_report():
             'expenses': expenses,
             'refunds': refunds,
             'profit': profit,
-            'profit_margin': profit_margin
+            'profit_margin': profit_margin,
+            'applied_margin': margin  # Adicionar margem aplicada
         })
     
     # Ordenar por lucro
@@ -1202,7 +1217,14 @@ def profitability_report():
     total_revenue = sum(data['revenue'] for data in profitability_data)
     total_expenses = sum(data['expenses'] for data in profitability_data)
     total_refunds = sum(data['refunds'] for data in profitability_data)
-    total_profit = total_revenue - total_expenses - total_refunds
+    
+    # Aplicar margem no total
+    if margin > 0:
+        estimated_total_cost = total_revenue * (1 - margin / 100)
+        total_profit = total_revenue - estimated_total_cost - total_expenses - total_refunds
+    else:
+        total_profit = total_revenue - total_expenses - total_refunds
+    
     total_profit_margin = (total_profit / total_revenue * 100) if total_revenue > 0 else 0
     
     # Dados para o gráfico
@@ -1229,5 +1251,6 @@ def profitability_report():
         revenue_data=json.dumps(revenue_data),
         profit_data=json.dumps(profit_data),
         margin_data=json.dumps(margin_data),
-        meses=MESES
+        meses=MESES,
+        margin=margin  # Passar a margem para o template
     )
