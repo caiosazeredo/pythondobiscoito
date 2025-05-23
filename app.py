@@ -1513,10 +1513,12 @@ def user_movements(unit_id, cashier_id):
     is_financial_cashier = cashier['number'] == 0
     
     # Obter data para filtrar movimentos - CORREÇÃO: usar POST se disponível
-    if request.method == 'POST' and 'date_filter' in request.form:
+    """ if request.method == 'POST' and 'date_filter' in request.form:
         date_str = request.form.get('date_filter')
     else:
         date_str = request.args.get('date')
+    """
+    date_str = request.values.get('date')
     
     if date_str:
         try:

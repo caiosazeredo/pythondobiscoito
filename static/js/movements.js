@@ -1,12 +1,13 @@
 // Variáveis globais para armazenar os métodos de pagamento
 let paymentMethodsData = {};
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     // Inicializar funcionalidades principais
     initializeDateFilter();
     initializePaymentMethods();
     initializeExpenseCategories();
-    
+    initializeSingleMovementForm(); 
+
     // Inicializar registro em lote apenas se não for caixa financeiro
     const batchTab = document.getElementById('batch-tab');
     if (batchTab) {
@@ -15,16 +16,37 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Função para inicializar o filtro de data
-function initializeDateFilter() {
+/* function initializeDateFilter() {
     const dateFilter = document.getElementById('dateFilter');
     const hiddenDateFilter = document.getElementById('hiddenDateFilter');
     const dateForm = document.getElementById('dateForm');
-    
+
     if (dateFilter && hiddenDateFilter && dateForm) {
-        dateFilter.addEventListener('change', function() {
+        dateFilter.addEventListener('change', function () {
             hiddenDateFilter.value = this.value;
             dateForm.submit();
         });
+    }
+} */
+
+function initializeDateFilter() {
+    const dateFilter = document.getElementById('dateFilter');
+    const formDate = document.getElementById('formDate');
+
+    if (!dateFilter) return;
+
+    // 1. mudar a data só recarrega a página
+    dateFilter.addEventListener('change', () => {
+        const newDate = dateFilter.value;
+        // mantém ?date=AAAA-MM-DD na URL
+        const url = new URL(window.location.href);
+        url.searchParams.set('date', newDate);
+        window.location.href = url.toString();
+    });
+
+    // 2. garante que o hidden acompanha o seletor
+    if (formDate) {
+        dateFilter.addEventListener('change', () => formDate.value = dateFilter.value);
     }
 }
 
@@ -32,16 +54,16 @@ function initializeDateFilter() {
 function initializePaymentMethods() {
     const paymentMethodMain = document.getElementById('payment_method_main');
     const paymentMethodDetail = document.getElementById('payment_method');
-    
+
     if (!paymentMethodMain || !paymentMethodDetail) return;
-    
+
     // Função para carregar formas de pagamento detalhadas
     function loadPaymentMethods(parentId) {
         fetch(`/api/payment_methods/${parentId}`)
             .then(response => response.json())
             .then(data => {
                 paymentMethodDetail.innerHTML = '';
-                
+
                 if (data.length === 0) {
                     // Se não houver subcategorias, usa o próprio método principal
                     const option = document.createElement('option');
@@ -55,7 +77,7 @@ function initializePaymentMethods() {
                     defaultOption.value = '';
                     defaultOption.textContent = 'Selecione';
                     paymentMethodDetail.appendChild(defaultOption);
-                    
+
                     // Adiciona subcategorias
                     data.forEach(method => {
                         const option = document.createElement('option');
@@ -65,14 +87,14 @@ function initializePaymentMethods() {
                         paymentMethodDetail.appendChild(option);
                     });
                 }
-                
+
                 // Armazenar dados para uso posterior
                 paymentMethodsData[parentId] = data;
             })
             .catch(error => console.error('Erro ao carregar formas de pagamento:', error));
     }
-    
-    paymentMethodMain.addEventListener('change', function() {
+
+    paymentMethodMain.addEventListener('change', function () {
         if (this.value) {
             loadPaymentMethods(this.value);
         } else {
@@ -85,11 +107,11 @@ function initializePaymentMethods() {
 function initializeExpenseCategories() {
     const expenseCategoryContainer = document.getElementById('expenseCategoryContainer');
     const typeRadios = document.getElementsByName('type');
-    
+
     if (!expenseCategoryContainer || typeRadios.length === 0) return;
-    
+
     for (const radio of typeRadios) {
-        radio.addEventListener('change', function() {
+        radio.addEventListener('change', function () {
             if (this.value === 'saida') {
                 expenseCategoryContainer.style.display = 'none';
             } else if (this.value === 'despesa_loja') {
@@ -97,7 +119,7 @@ function initializeExpenseCategories() {
             }
         });
     }
-    
+
     // Disparar evento para configuração inicial
     const checkedRadio = document.querySelector('input[name="type"]:checked');
     if (checkedRadio) {
@@ -111,16 +133,16 @@ function initializeBatchMovements() {
     const batchContainer = document.getElementById('batchEntriesContainer');
     const addEntryBtn = document.getElementById('addBatchEntry');
     const saveAllBtn = document.getElementById('saveBatchEntries');
-    
+
     if (!batchForm || !batchContainer || !addEntryBtn || !saveAllBtn) {
         return;
     }
-    
+
     let entryIdCounter = 0;
     let lastPaymentMethod = null;
     let lastPaymentDetail = null;
     let isProcessing = false; // Controle para evitar duplo processamento
-    
+
     // Função para carregar opções detalhadas de pagamento para lote
     function loadBatchPaymentDetails(parentId, selectElement) {
         return new Promise((resolve, reject) => {
@@ -143,18 +165,18 @@ function initializeBatchMovements() {
             }
         });
     }
-    
+
     // Função para atualizar as opções do select
     function updateSelectOptions(selectElement, data, parentId) {
         selectElement.innerHTML = '';
-        
+
         if (data.length === 0) {
             const option = document.createElement('option');
             option.value = parentId;
             const mainSelect = selectElement.closest('.batch-entry').querySelector('.batch-payment-method');
             option.textContent = mainSelect.options[mainSelect.selectedIndex].textContent;
             selectElement.appendChild(option);
-            
+
             if (lastPaymentMethod === parentId) {
                 lastPaymentDetail = parentId;
                 option.selected = true;
@@ -165,22 +187,22 @@ function initializeBatchMovements() {
             defaultOption.value = '';
             defaultOption.textContent = 'Selecione';
             selectElement.appendChild(defaultOption);
-            
+
             // Adiciona subcategorias
             let foundLastDetail = false;
             data.forEach(method => {
                 const option = document.createElement('option');
                 option.value = method.id;
                 option.textContent = method.name;
-                
+
                 if (lastPaymentDetail && method.id.toString() === lastPaymentDetail.toString()) {
                     option.selected = true;
                     foundLastDetail = true;
                 }
-                
+
                 selectElement.appendChild(option);
             });
-            
+
             // Se não encontrou o último detalhamento, selecionar o primeiro
             if (!foundLastDetail && data.length > 0 && selectElement.options.length > 1) {
                 selectElement.options[1].selected = true;
@@ -188,17 +210,17 @@ function initializeBatchMovements() {
             }
         }
     }
-    
+
     // Função para adicionar uma nova linha de entrada
     function addBatchEntry() {
         entryIdCounter++;
-        
+
         const entryRow = document.createElement('div');
         entryRow.className = 'batch-entry row mb-2 border-bottom pb-2';
         entryRow.setAttribute('data-entry-id', entryIdCounter);
-        
+
         let paymentMethodOptions = '<option value="">Selecione</option>';
-        
+
         // Copiar opções do select principal
         const mainSelectOptions = document.querySelectorAll('#payment_method_main option');
         mainSelectOptions.forEach(option => {
@@ -210,7 +232,7 @@ function initializeBatchMovements() {
                 }
             }
         });
-        
+
         entryRow.innerHTML = `
             <div class="col-md-3">
                 <select class="form-select batch-payment-method" name="batch_payment_method_${entryIdCounter}" required>
@@ -237,17 +259,17 @@ function initializeBatchMovements() {
                 </button>
             </div>
         `;
-        
+
         batchContainer.appendChild(entryRow);
-        
+
         // Adicionar event listeners
         const paymentMethodSelect = entryRow.querySelector('.batch-payment-method');
         const paymentDetailSelect = entryRow.querySelector('.batch-payment-detail');
         const removeBtn = entryRow.querySelector('.remove-entry');
         const amountInput = entryRow.querySelector('.batch-amount');
-        
+
         // Carregar opções detalhadas com base no método de pagamento
-        paymentMethodSelect.addEventListener('change', async function() {
+        paymentMethodSelect.addEventListener('change', async function () {
             if (this.value) {
                 lastPaymentMethod = this.value;
                 await loadBatchPaymentDetails(this.value, paymentDetailSelect);
@@ -256,26 +278,26 @@ function initializeBatchMovements() {
                 lastPaymentDetail = null;
             }
         });
-        
+
         // Salvar último detalhamento selecionado
-        paymentDetailSelect.addEventListener('change', function() {
+        paymentDetailSelect.addEventListener('change', function () {
             if (this.value) {
                 lastPaymentDetail = this.value;
             }
         });
-        
+
         // Se tiver valor inicial, disparar o change
         if (paymentMethodSelect.value) {
             paymentMethodSelect.dispatchEvent(new Event('change'));
         }
-        
+
         // Remover entrada
-        removeBtn.addEventListener('click', function() {
+        removeBtn.addEventListener('click', function () {
             entryRow.remove();
         });
-        
+
         // Permitir adicionar nova linha ao pressionar Enter
-        amountInput.addEventListener('keypress', function(e) {
+        amountInput.addEventListener('keypress', function (e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 if (this.value && parseFloat(this.value) > 0) {
@@ -292,9 +314,9 @@ function initializeBatchMovements() {
             }
         });
     }
-    
+
     // Adicionar primeira entrada ao clicar no botão
-    addEntryBtn.addEventListener('click', function() {
+    addEntryBtn.addEventListener('click', function () {
         addBatchEntry();
         // Focar no primeiro campo da nova entrada
         setTimeout(() => {
@@ -305,18 +327,18 @@ function initializeBatchMovements() {
             }
         }, 100);
     });
-    
+
     // Salvar todas as entradas - VERSÃO CORRIGIDA
-    saveAllBtn.addEventListener('click', async function() {
+    saveAllBtn.addEventListener('click', async function () {
         // Evitar duplo processamento
         if (isProcessing) {
             return;
         }
         isProcessing = true;
-        
+
         // Obter apenas as entradas que ainda existem no DOM
         const entries = Array.from(batchContainer.querySelectorAll('.batch-entry'));
-        
+
         if (entries.length === 0) {
             Swal.fire({
                 icon: 'warning',
@@ -327,37 +349,37 @@ function initializeBatchMovements() {
             isProcessing = false;
             return;
         }
-        
+
         // Criar array para armazenar os dados válidos
         const validEntries = [];
         let hasInvalidEntries = false;
-        
+
         // Validar cada entrada
         entries.forEach((entry) => {
             const paymentDetail = entry.querySelector('.batch-payment-detail');
             const amount = entry.querySelector('.batch-amount');
             const description = entry.querySelector('.batch-description');
-            
+
             // Resetar classes de validação
             paymentDetail.classList.remove('is-invalid');
             amount.classList.remove('is-invalid');
-            
+
             // Validar campos
             let isEntryValid = true;
-            
+
             if (!paymentDetail.value) {
                 isEntryValid = false;
                 hasInvalidEntries = true;
                 paymentDetail.classList.add('is-invalid');
             }
-            
+
             const amountValue = parseFloat(amount.value);
             if (!amount.value || isNaN(amountValue) || amountValue <= 0) {
                 isEntryValid = false;
                 hasInvalidEntries = true;
                 amount.classList.add('is-invalid');
             }
-            
+
             // Se a entrada for válida, adicionar ao array
             if (isEntryValid) {
                 validEntries.push({
@@ -367,7 +389,7 @@ function initializeBatchMovements() {
                 });
             }
         });
-        
+
         if (hasInvalidEntries) {
             Swal.fire({
                 icon: 'error',
@@ -378,7 +400,7 @@ function initializeBatchMovements() {
             isProcessing = false;
             return;
         }
-        
+
         if (validEntries.length === 0) {
             Swal.fire({
                 icon: 'warning',
@@ -389,17 +411,17 @@ function initializeBatchMovements() {
             isProcessing = false;
             return;
         }
-        
+
         // Criar objeto com os dados para enviar
         const dataToSend = {
             entries: validEntries,
             date: document.getElementById('currentDateValue').value
         };
-        
+
         // Desabilitar o botão durante o envio
         saveAllBtn.disabled = true;
         saveAllBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Salvando...';
-        
+
         // Enviar via fetch API como JSON
         fetch(batchForm.action, {
             method: 'POST',
@@ -409,54 +431,68 @@ function initializeBatchMovements() {
             },
             body: JSON.stringify(dataToSend)
         })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Erro na resposta do servidor');
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.success) {
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Sucesso',
-                    text: data.message,
-                    confirmButtonColor: '#fec32e'
-                }).then(() => {
-                    // Limpar o formulário
-                    batchContainer.innerHTML = '';
-                    entryIdCounter = 0;
-                    lastPaymentMethod = null;
-                    lastPaymentDetail = null;
-                    
-                    // Recarregar a página mantendo a data
-                    const currentUrl = new URL(window.location.href);
-                    currentUrl.searchParams.set('date', document.getElementById('currentDateValue').value);
-                    window.location.href = currentUrl.toString();
-                });
-            } else {
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Erro na resposta do servidor');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Sucesso',
+                        text: data.message,
+                        confirmButtonColor: '#fec32e'
+                    }).then(() => {
+                        // Limpar o formulário
+                        batchContainer.innerHTML = '';
+                        entryIdCounter = 0;
+                        lastPaymentMethod = null;
+                        lastPaymentDetail = null;
+
+                        // Recarregar a página mantendo a data
+                        const currentUrl = new URL(window.location.href);
+                        currentUrl.searchParams.set('date', document.getElementById('currentDateValue').value);
+                        window.location.href = currentUrl.toString();
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Erro',
+                        text: data.message,
+                        confirmButtonColor: '#fec32e'
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao salvar movimentações:', error);
                 Swal.fire({
                     icon: 'error',
                     title: 'Erro',
-                    text: data.message,
+                    text: 'Ocorreu um erro ao salvar as movimentações. Por favor, tente novamente.',
                     confirmButtonColor: '#fec32e'
                 });
-            }
-        })
-        .catch(error => {
-            console.error('Erro ao salvar movimentações:', error);
-            Swal.fire({
-                icon: 'error',
-                title: 'Erro',
-                text: 'Ocorreu um erro ao salvar as movimentações. Por favor, tente novamente.',
-                confirmButtonColor: '#fec32e'
+            })
+            .finally(() => {
+                // Reabilitar o botão
+                saveAllBtn.disabled = false;
+                saveAllBtn.innerHTML = '<i class="bi bi-save me-2"></i> Salvar Todas as Entradas';
+                isProcessing = false;
             });
-        })
-        .finally(() => {
-            // Reabilitar o botão
-            saveAllBtn.disabled = false;
-            saveAllBtn.innerHTML = '<i class="bi bi-save me-2"></i> Salvar Todas as Entradas';
-            isProcessing = false;
-        });
+    });
+}
+
+// Ativa spinner/disable no botão do formulário principal
+function initializeSingleMovementForm() {
+    const form   = document.querySelector('#register form');
+    const button = document.getElementById('registerMovementBtn');
+
+    if (!form || !button) return;
+
+    form.addEventListener('submit', () => {
+        button.disabled = true;
+        button.innerHTML =
+            '<span class="spinner-border spinner-border-sm me-2"></span>';
     });
 }

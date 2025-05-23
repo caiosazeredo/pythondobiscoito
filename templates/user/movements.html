@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
-{% block title %}Movimentações - {% if cashier.number == 0 %}Caixa Financeiro{% else %}Caixa {{ cashier.number }}{% endif %} - Casa do Biscoito{% endblock %}
+{% block title %}Movimentações - {% if cashier.number == 0 %}Caixa Financeiro{% else %}Caixa {{ cashier.number }}{%
+endif %} - Casa do Biscoito{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -17,35 +18,40 @@
                 {% endif %}
             </h4>
             <div class="d-flex align-items-center">
-                <form method="post" id="dateForm">
+                <!-- <form method="post" id="dateForm">
                     <input type="hidden" name="date_filter" id="hiddenDateFilter" value="{{ date }}">
-                    <input type="date" class="form-control" id="dateFilter" value="{{ date }}">
-                </form>
+                    <input type="date" class="form-control" name="date" id="dateFilter" value="{{ date }}">
+                </form> -->
+                <input type="date" class="form-control" name="date" id="dateFilter" value="{{ date }}">
             </div>
         </div>
-        
+
         <div class="card-body">
             <ul class="nav nav-tabs mb-4" id="movementTabs" role="tablist">
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="register-tab" data-bs-toggle="tab" data-bs-target="#register" type="button" role="tab" aria-controls="register" aria-selected="true">
+                    <button class="nav-link active" id="register-tab" data-bs-toggle="tab" data-bs-target="#register"
+                        type="button" role="tab" aria-controls="register" aria-selected="true">
                         {% if is_financial_cashier %}Registrar Saída{% else %}Registrar Movimentação{% endif %}
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab" aria-controls="history" aria-selected="false">Histórico</button>
+                    <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history"
+                        type="button" role="tab" aria-controls="history" aria-selected="false">Histórico</button>
                 </li>
                 {% if not is_financial_cashier %}
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="batch-tab" data-bs-toggle="tab" data-bs-target="#batch" type="button" role="tab" aria-controls="batch" aria-selected="false">Registro em Lote</button>
+                    <button class="nav-link" id="batch-tab" data-bs-toggle="tab" data-bs-target="#batch" type="button"
+                        role="tab" aria-controls="batch" aria-selected="false">Registro em Lote</button>
                 </li>
                 {% endif %}
                 {% if is_financial_cashier %}
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="estornos-tab" data-bs-toggle="tab" data-bs-target="#estornos" type="button" role="tab" aria-controls="estornos" aria-selected="false">Estornos do Dia</button>
+                    <button class="nav-link" id="estornos-tab" data-bs-toggle="tab" data-bs-target="#estornos"
+                        type="button" role="tab" aria-controls="estornos" aria-selected="false">Estornos do Dia</button>
                 </li>
                 {% endif %}
             </ul>
-            
+
             <div class="tab-content" id="movementTabsContent">
                 <!-- Aba de Registro de Movimentação -->
                 <div class="tab-pane fade show active" id="register" role="tabpanel" aria-labelledby="register-tab">
@@ -53,22 +59,26 @@
                         <div class="col-md-8">
                             <div class="card shadow-sm">
                                 <div class="card-body">
-                                    <form method="post" action="{{ url_for('user_movements', unit_id=unit.id, cashier_id=cashier.id) }}">
-                                        <input type="hidden" name="current_date" value="{{ date }}">
-                                        
+                                    <form method="post"
+                                        action="{{ url_for('user_movements', unit_id=unit.id, cashier_id=cashier.id) }}">
+                                        <!-- <input type="hidden" name="current_date" value="{{ date }}"> -->
+                                        <input type="hidden" name="date" id="formDate" value="{{ date }}">
+
                                         <div class="mb-3">
                                             <label class="form-label">Tipo de Movimentação</label>
                                             <div class="d-flex gap-3 flex-wrap">
                                                 {% if not is_financial_cashier %}
                                                 <!-- Para caixas normais -->
                                                 <div class="form-check">
-                                                    <input class="form-check-input" type="radio" name="type" id="typeEntrada" value="entrada" checked>
+                                                    <input class="form-check-input" type="radio" name="type"
+                                                        id="typeEntrada" value="entrada" checked>
                                                     <label class="form-check-label" for="typeEntrada">
                                                         Entrada
                                                     </label>
                                                 </div>
                                                 <div class="form-check">
-                                                    <input class="form-check-input" type="radio" name="type" id="typeEstorno" value="estorno">
+                                                    <input class="form-check-input" type="radio" name="type"
+                                                        id="typeEstorno" value="estorno">
                                                     <label class="form-check-label" for="typeEstorno">
                                                         Estorno
                                                     </label>
@@ -76,13 +86,15 @@
                                                 {% else %}
                                                 <!-- Para o Caixa Financeiro -->
                                                 <div class="form-check">
-                                                    <input class="form-check-input" type="radio" name="type" id="typeSaida" value="saida" checked>
+                                                    <input class="form-check-input" type="radio" name="type"
+                                                        id="typeSaida" value="saida" checked>
                                                     <label class="form-check-label" for="typeSaida">
                                                         Saída
                                                     </label>
                                                 </div>
                                                 <div class="form-check">
-                                                    <input class="form-check-input" type="radio" name="type" id="typeDespesa" value="despesa_loja">
+                                                    <input class="form-check-input" type="radio" name="type"
+                                                        id="typeDespesa" value="despesa_loja">
                                                     <label class="form-check-label" for="typeDespesa">
                                                         Despesa da Loja
                                                     </label>
@@ -90,83 +102,94 @@
                                                 {% endif %}
                                             </div>
                                         </div>
-                                        
+
                                         <!-- Container para categorias de despesa -->
                                         {% if is_financial_cashier %}
                                         <div class="mb-3" id="expenseCategoryContainer" style="display: none;">
-                                            <label for="expense_category" class="form-label">Categoria de Despesa</label>
+                                            <label for="expense_category" class="form-label">Categoria de
+                                                Despesa</label>
                                             <select class="form-select" id="expense_category" name="expense_category">
                                                 <option value="">Selecione uma categoria</option>
                                                 <optgroup label="Despesas Fixas">
                                                     {% for category in expense_categories %}
-                                                        {% if category.type == 'fixa' %}
-                                                        <option value="{{ category.id }}">{{ category.name }}</option>
-                                                        {% endif %}
+                                                    {% if category.type == 'fixa' %}
+                                                    <option value="{{ category.id }}">{{ category.name }}</option>
+                                                    {% endif %}
                                                     {% endfor %}
                                                 </optgroup>
                                                 <optgroup label="Sócios">
                                                     {% for category in expense_categories %}
-                                                        {% if category.type == 'socio' %}
-                                                        <option value="{{ category.id }}">{{ category.name }}</option>
-                                                        {% endif %}
+                                                    {% if category.type == 'socio' %}
+                                                    <option value="{{ category.id }}">{{ category.name }}</option>
+                                                    {% endif %}
                                                     {% endfor %}
                                                 </optgroup>
                                                 <optgroup label="Fornecedores">
                                                     {% for category in expense_categories %}
-                                                        {% if category.type == 'fornecedor' %}
-                                                        <option value="{{ category.id }}">{{ category.name }}</option>
-                                                        {% endif %}
+                                                    {% if category.type == 'fornecedor' %}
+                                                    <option value="{{ category.id }}">{{ category.name }}</option>
+                                                    {% endif %}
                                                     {% endfor %}
                                                 </optgroup>
                                                 <optgroup label="Extras">
                                                     {% for category in expense_categories %}
-                                                        {% if category.type == 'extra' %}
-                                                        <option value="{{ category.id }}">{{ category.name }}</option>
-                                                        {% endif %}
+                                                    {% if category.type == 'extra' %}
+                                                    <option value="{{ category.id }}">{{ category.name }}</option>
+                                                    {% endif %}
                                                     {% endfor %}
                                                 </optgroup>
                                             </select>
                                         </div>
                                         {% endif %}
-                                        
+
                                         <div class="mb-3">
-                                            <label for="payment_method_main" class="form-label">Forma de Pagamento</label>
+                                            <label for="payment_method_main" class="form-label">Forma de
+                                                Pagamento</label>
                                             <select class="form-select" id="payment_method_main" required>
                                                 <option value="">Selecione</option>
                                                 {% for method in payment_methods_main %}
-                                                <option value="{{ method.id }}" data-category="{{ method.category }}">{{ method.name }}</option>
+                                                <option value="{{ method.id }}" data-category="{{ method.category }}">{{
+                                                    method.name }}</option>
                                                 {% endfor %}
                                             </select>
                                         </div>
-                                        
+
                                         <div class="mb-3">
                                             <label for="payment_method" class="form-label">Detalhamento</label>
-                                            <select class="form-select" id="payment_method" name="payment_method" required>
+                                            <select class="form-select" id="payment_method" name="payment_method"
+                                                required>
                                                 <option value="">Selecione o tipo de pagamento primeiro</option>
                                             </select>
                                         </div>
-                                        
+
                                         <div class="mb-3">
                                             <label for="amount" class="form-label">Valor</label>
                                             <div class="input-group">
                                                 <span class="input-group-text">R$</span>
-                                                <input type="number" class="form-control" id="amount" name="amount" step="0.01" min="0.01" required>
+                                                <input type="number" class="form-control" id="amount" name="amount"
+                                                    step="0.01" min="0.01" required>
                                             </div>
                                         </div>
-                                        
+
                                         <div class="mb-3">
                                             <label for="description" class="form-label">Descrição</label>
-                                            <textarea class="form-control" id="description" name="description" rows="2"></textarea>
+                                            <textarea class="form-control" id="description" name="description"
+                                                rows="2"></textarea>
                                         </div>
-                                        
-                                        <button type="submit" class="btn btn-warning w-100 py-2 mt-3">
+
+                                        <!-- <button type="submit" class="btn btn-warning w-100 py-2 mt-3">
+                                            <i class="bi bi-plus-circle me-1"></i> Adicionar Movimentação
+                                        </button> -->
+                                        <button type="submit" id="registerMovementBtn"
+                                            class="btn btn-warning w-100 py-2 mt-3">
                                             <i class="bi bi-plus-circle me-1"></i> Adicionar Movimentação
                                         </button>
+
                                     </form>
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div class="col-md-4">
                             <!-- Card de Saldo em Caixa -->
                             <div class="card shadow-sm bg-light mb-4">
@@ -183,13 +206,14 @@
                                     <hr>
                                     <div class="d-flex justify-content-between align-items-center">
                                         <span class="fw-bold">Total em Caixa:</span>
-                                        <span class="fw-bold {{ 'text-success' if saldo_caixa_total >= 0 else 'text-danger' }}">
+                                        <span
+                                            class="fw-bold {{ 'text-success' if saldo_caixa_total >= 0 else 'text-danger' }}">
                                             R$ {{ "%.2f"|format(saldo_caixa_total) }}
                                         </span>
                                     </div>
                                 </div>
                             </div>
-                            
+
                             {% if not is_financial_cashier %}
                             <!-- Card do PDV para caixas normais -->
                             <div class="card shadow-sm bg-light mb-4">
@@ -202,12 +226,13 @@
                                             <label for="z_value" class="form-label">Valor Z (PDV)</label>
                                             <div class="input-group">
                                                 <span class="input-group-text">R$</span>
-                                                <input type="number" name="z_value" id="z_value" class="form-control" step="0.01" value="{{ z_total }}">
+                                                <input type="number" name="z_value" id="z_value" class="form-control"
+                                                    step="0.01" value="{{ z_total }}">
                                                 <button type="submit" class="btn btn-warning btn-sm">Atualizar</button>
                                             </div>
                                         </div>
                                     </form>
-                                    
+
                                     <div class="d-flex justify-content-between mb-2">
                                         <span>Total Vendas (T):</span>
                                         <span class="fw-bold text-success">R$ {{ "%.2f"|format(t_total) }}</span>
@@ -226,7 +251,7 @@
                                 </div>
                             </div>
                             {% endif %}
-                            
+
                             <!-- Card de Resumo do Dia -->
                             <div class="card shadow-sm bg-light">
                                 <div class="card-body">
@@ -237,15 +262,17 @@
                                         Resumo do Caixa
                                         {% endif %}
                                     </h5>
-                                    
+
                                     {% if is_financial_cashier %}
                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                         <span>Total Entradas:</span>
-                                        <span class="fw-bold text-success">R$ {{ "%.2f"|format(total_entrada_all) }}</span>
+                                        <span class="fw-bold text-success">R$ {{ "%.2f"|format(total_entrada_all)
+                                            }}</span>
                                     </div>
                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                         <span>Total Estornos:</span>
-                                        <span class="fw-bold text-danger">R$ {{ "%.2f"|format(total_estorno_all) }}</span>
+                                        <span class="fw-bold text-danger">R$ {{ "%.2f"|format(total_estorno_all)
+                                            }}</span>
                                     </div>
                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                         <span>Total Saídas:</span>
@@ -253,44 +280,47 @@
                                     </div>
                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                         <span>Total Despesas:</span>
-                                        <span class="fw-bold text-danger">R$ {{ "%.2f"|format(total_despesa_all) }}</span>
+                                        <span class="fw-bold text-danger">R$ {{ "%.2f"|format(total_despesa_all)
+                                            }}</span>
                                     </div>
                                     <hr>
                                     <div class="d-flex justify-content-between align-items-center">
                                         <span class="fw-bold">Saldo Líquido:</span>
-                                        <span class="fw-bold {{ 'text-success' if saldo_liquido_dia >= 0 else 'text-danger' }}">
+                                        <span
+                                            class="fw-bold {{ 'text-success' if saldo_liquido_dia >= 0 else 'text-danger' }}">
                                             R$ {{ "%.2f"|format(saldo_liquido_dia) }}
                                         </span>
                                     </div>
                                     {% else %}
                                     <div class="small text-muted mb-2">Valores por Categoria:</div>
-                                    
+
                                     {% if payment_category_totals %}
-                                        {% for category, total in payment_category_totals.items() %}
-                                            <div class="d-flex justify-content-between align-items-center small mb-1">
-                                                <span>{{ category|capitalize }}:</span>
-                                                <span class="text-success">R$ {{ "%.2f"|format(total) }}</span>
-                                            </div>
-                                        {% endfor %}
+                                    {% for category, total in payment_category_totals.items() %}
+                                    <div class="d-flex justify-content-between align-items-center small mb-1">
+                                        <span>{{ category|capitalize }}:</span>
+                                        <span class="text-success">R$ {{ "%.2f"|format(total) }}</span>
+                                    </div>
+                                    {% endfor %}
                                     {% endif %}
-                                    
+
                                     <hr>
-                                    
+
                                     <div class="d-flex justify-content-between align-items-center fw-bold">
                                         <span>Total Entradas:</span>
                                         <span class="text-success">R$ {{ "%.2f"|format(total_entrada) }}</span>
                                     </div>
-                                    
+
                                     <div class="d-flex justify-content-between align-items-center fw-bold">
                                         <span>Total Estornos:</span>
                                         <span class="text-danger">R$ {{ "%.2f"|format(total_estorno) }}</span>
                                     </div>
-                                    
+
                                     <hr>
-                                    
+
                                     <div class="d-flex justify-content-between align-items-center fw-bold">
                                         <span>Saldo do Caixa:</span>
-                                        <span class="{{ 'text-success' if total_entrada - total_estorno >= 0 else 'text-danger' }}">
+                                        <span
+                                            class="{{ 'text-success' if total_entrada - total_estorno >= 0 else 'text-danger' }}">
                                             R$ {{ "%.2f"|format(total_entrada - total_estorno) }}
                                         </span>
                                     </div>
@@ -300,7 +330,7 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <!-- Aba de Histórico -->
                 <div class="tab-pane fade" id="history" role="tabpanel" aria-labelledby="history-tab">
                     <div class="table-responsive">
@@ -331,13 +361,17 @@
                                         {% endif %}
                                     </td>
                                     <td>{{ mov.payment_method_name }}</td>
-                                    <td class="fw-bold {{ 'text-success' if mov.type == 'entrada' else 'text-danger' }}">
+                                    <td
+                                        class="fw-bold {{ 'text-success' if mov.type == 'entrada' else 'text-danger' }}">
                                         R$ {{ "%.2f"|format(mov.amount) }}
                                     </td>
                                     <td>{{ mov.description }}</td>
                                     <td>
-                                        <form method="post" action="{{ url_for('delete_movement', unit_id=unit.id, cashier_id=cashier.id, movement_id=mov.id) }}" class="d-inline">
-                                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Tem certeza que deseja excluir esta movimentação?')">
+                                        <form method="post"
+                                            action="{{ url_for('delete_movement', unit_id=unit.id, cashier_id=cashier.id, movement_id=mov.id) }}"
+                                            class="d-inline">
+                                            <button type="submit" class="btn btn-sm btn-danger"
+                                                onclick="return confirm('Tem certeza que deseja excluir esta movimentação?')">
                                                 <i class="bi bi-trash"></i>
                                             </button>
                                         </form>
@@ -345,24 +379,27 @@
                                 </tr>
                                 {% else %}
                                 <tr>
-                                    <td colspan="6" class="text-center">Nenhuma movimentação registrada para esta data.</td>
+                                    <td colspan="6" class="text-center">Nenhuma movimentação registrada para esta data.
+                                    </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
                         </table>
                     </div>
                 </div>
-                
+
                 <!-- Aba de Registro em Lote (apenas para caixas normais) -->
                 {% if not is_financial_cashier %}
                 <div class="tab-pane fade" id="batch" role="tabpanel" aria-labelledby="batch-tab">
                     <div class="card shadow-sm">
                         <div class="card-body">
-                            <form id="batchMovementsForm" action="{{ url_for('batch_movements', unit_id=unit.id, cashier_id=cashier.id) }}" method="post">
+                            <form id="batchMovementsForm"
+                                action="{{ url_for('batch_movements', unit_id=unit.id, cashier_id=cashier.id) }}"
+                                method="post">
                                 <input type="hidden" id="batchUnitId" value="{{ unit.id }}">
                                 <input type="hidden" id="batchCashierId" value="{{ cashier.id }}">
                                 <input type="hidden" id="currentDateValue" value="{{ date }}">
-                                
+
                                 <div class="mb-3">
                                     <div class="d-flex justify-content-between align-items-center mb-3">
                                         <h5 class="mb-0">Adicionar Múltiplas Entradas</h5>
@@ -370,7 +407,7 @@
                                             <i class="bi bi-plus-circle"></i> Nova Linha
                                         </button>
                                     </div>
-                                    
+
                                     <div class="row fw-bold mb-2 border-bottom pb-2">
                                         <div class="col-md-3">Forma de Pagamento</div>
                                         <div class="col-md-3">Detalhamento</div>
@@ -378,12 +415,12 @@
                                         <div class="col-md-3">Descrição</div>
                                         <div class="col-md-1">Remover</div>
                                     </div>
-                                    
+
                                     <div id="batchEntriesContainer">
                                         <!-- Entradas dinâmicas serão adicionadas aqui -->
                                     </div>
                                 </div>
-                                
+
                                 <div class="d-grid">
                                     <button type="button" id="saveBatchEntries" class="btn btn-warning py-2">
                                         <i class="bi bi-save me-2"></i> Salvar Todas as Entradas
@@ -394,7 +431,7 @@
                     </div>
                 </div>
                 {% endif %}
-                
+
                 <!-- Aba de Estornos (apenas para caixa financeiro) -->
                 {% if is_financial_cashier %}
                 <div class="tab-pane fade" id="estornos" role="tabpanel" aria-labelledby="estornos-tab">
