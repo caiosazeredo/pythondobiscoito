@@ -37,9 +37,10 @@
                         <div class="col-md-3">
                             <label for="margin" class="form-label">Margem de Lucro (%)</label>
                             <div class="input-group">
-                                <input type="number" name="margin" id="margin" class="form-control" value="{{ margin }}" min="0" max="100" step="0.1">
+                                <input type="number" name="margin" id="margin" class="form-control" value="{{ margin if margin > 0 else '' }}" min="0" max="100" step="0.1" placeholder="0">
                                 <span class="input-group-text">%</span>
                             </div>
+                            <div class="form-text small">Deixe vazio para cálculo tradicional</div>
                         </div>
                         <div class="col-md-3 d-flex align-items-end">
                             <button type="submit" class="btn btn-warning w-100">Filtrar</button>
@@ -56,6 +57,7 @@
             <div class="alert alert-info">
                 <i class="bi bi-info-circle-fill me-2"></i>
                 <strong>Nota:</strong> Os valores de lucro exibidos consideram a margem de {{ "%.1f"|format(margin) }}% aplicada sobre o faturamento.
+                <br><small>Fórmula utilizada: Lucro = (Faturamento × {{ "%.1f"|format(margin) }}%) - Despesas - Estornos</small>
             </div>
         </div>
     </div>
@@ -198,6 +200,39 @@
                         <div class="tab-pane fade" id="margin" role="tabpanel" aria-labelledby="margin-tab">
                             <div class="chart-container">
                                 <canvas id="marginChart"></canvas>
+                            </div>
+                            <div class="mt-3">
+                                <h6 class="text-center">Margem de Lucro por Unidade (%)</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Unidade</th>
+                                                <th class="text-end">Margem (%)</th>
+                                                <th class="text-end">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for data in profitability_data %}
+                                            <tr>
+                                                <td>{{ data.unit.name }}</td>
+                                                <td class="text-end {{ 'text-success' if data.profit_margin >= 15 else 'text-warning' if data.profit_margin >= 5 else 'text-danger' }}">
+                                                    {{ "%.1f"|format(data.profit_margin) }}%
+                                                </td>
+                                                <td class="text-end">
+                                                    {% if data.profit_margin >= 15 %}
+                                                    <span class="badge bg-success">Excelente</span>
+                                                    {% elif data.profit_margin >= 5 %}
+                                                    <span class="badge bg-warning">Boa</span>
+                                                    {% else %}
+                                                    <span class="badge bg-danger">Atenção</span>
+                                                    {% endif %}
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -477,8 +512,18 @@
                 datasets: [{
                     label: 'Margem de Lucro (%)',
                     data: marginData.map(item => item.value),
-                    backgroundColor: 'rgba(33, 150, 243, 0.7)',
-                    borderColor: 'rgba(33, 150, 243, 1)',
+                    backgroundColor: function(context) {
+                        const value = context.parsed.x;
+                        if (value >= 15) return 'rgba(76, 175, 80, 0.7)';  // Verde para excelente
+                        if (value >= 5) return 'rgba(255, 193, 7, 0.7)';   // Amarelo para boa
+                        return 'rgba(244, 67, 54, 0.7)';                    // Vermelho para atenção
+                    },
+                    borderColor: function(context) {
+                        const value = context.parsed.x;
+                        if (value >= 15) return 'rgba(76, 175, 80, 1)';
+                        if (value >= 5) return 'rgba(255, 193, 7, 1)';
+                        return 'rgba(244, 67, 54, 1)';
+                    },
                     borderWidth: 1,
                     borderRadius: 4
                 }]

@@ -1110,6 +1110,7 @@ def cash_flow_report():
     )
 
 # 9. Relatório de Lucratividade (Acesso apenas superusuários)
+# 9. Relatório de Lucratividade (Acesso apenas superusuários) - CORRIGIDO
 @reports.route('/reports/profitability', methods=['GET', 'POST'])
 @login_required
 def profitability_report():
@@ -1127,12 +1128,14 @@ def profitability_report():
     # Definir período para o relatório
     if request.method == 'POST':
         year = int(request.form.get('year', datetime.now().year))
-        month = int(request.form.get('month', datetime.now().month)) if request.form.get('month') != 'all' else 'all'
-        margin = float(request.form.get('margin', 0))  # Nova linha para margem
+        month_value = request.form.get('month', 'all')
+        month = int(month_value) if month_value != 'all' else 'all'
+        margin = float(request.form.get('margin', 0)) if request.form.get('margin') else 0  # CORREÇÃO: Tratar valor vazio
     else:
         year = int(request.args.get('year', datetime.now().year))
-        month = int(request.args.get('month', datetime.now().month)) if request.args.get('month') != 'all' else 'all'
-        margin = float(request.args.get('margin', 0))  # Nova linha para margem
+        month_value = request.args.get('month', 'all')
+        month = int(month_value) if month_value != 'all' else 'all'
+        margin = float(request.args.get('margin', 0)) if request.args.get('margin') else 0  # CORREÇÃO: Tratar valor vazio
     
     # Definir período de consulta
     if month == 'all':
@@ -1154,19 +1157,19 @@ def profitability_report():
     for unit in units:
         # Receita da unidade
         cursor.execute(
-            "SELECT SUM(m.amount) as revenue "
+            "SELECT COALESCE(SUM(m.amount), 0) as revenue "
             "FROM movement m "
             "JOIN cashier c ON m.cashier_id = c.id "
-            "WHERE c.unit_id = %s AND m.type = 'entrada' "
+            "WHERE c.unit_id = %s AND m.type = 'entrada' AND m.payment_status = 'realizado' "
             "AND m.created_at BETWEEN %s AND %s",
             (unit['id'], start_datetime, end_datetime)
         )
         revenue_result = cursor.fetchone()
-        revenue = revenue_result['revenue'] if revenue_result and revenue_result['revenue'] else 0
+        revenue = float(revenue_result['revenue']) if revenue_result and revenue_result['revenue'] else 0.0
         
         # Despesas da unidade
         cursor.execute(
-            "SELECT SUM(m.amount) as expenses "
+            "SELECT COALESCE(SUM(m.amount), 0) as expenses "
             "FROM movement m "
             "JOIN cashier c ON m.cashier_id = c.id "
             "WHERE c.unit_id = %s AND (m.type = 'despesa_loja' OR m.type = 'saida') "
@@ -1174,11 +1177,11 @@ def profitability_report():
             (unit['id'], start_datetime, end_datetime)
         )
         expenses_result = cursor.fetchone()
-        expenses = expenses_result['expenses'] if expenses_result and expenses_result['expenses'] else 0
+        expenses = float(expenses_result['expenses']) if expenses_result and expenses_result['expenses'] else 0.0
         
         # Estornos
         cursor.execute(
-            "SELECT SUM(m.amount) as refunds "
+            "SELECT COALESCE(SUM(m.amount), 0) as refunds "
             "FROM movement m "
             "JOIN cashier c ON m.cashier_id = c.id "
             "WHERE c.unit_id = %s AND m.type = 'estorno' "
@@ -1186,19 +1189,23 @@ def profitability_report():
             (unit['id'], start_datetime, end_datetime)
         )
         refunds_result = cursor.fetchone()
-        refunds = refunds_result['refunds'] if refunds_result and refunds_result['refunds'] else 0
+        refunds = float(refunds_result['refunds']) if refunds_result and refunds_result['refunds'] else 0.0
         
-        # Aplicar margem sobre o faturamento
-        if margin > 0:
+        # CORREÇÃO: Cálculo do lucro com validação de margem
+        if margin > 0 and revenue > 0:
             # Calcular o custo estimado baseado na margem
-            estimated_cost = revenue * (1 - margin / 100)
-            # Lucro considerando a margem
-            profit = revenue - estimated_cost - expenses - refunds
+            estimated_cost = revenue * (margin / 100)  # CORREÇÃO: margem já em percentual
+            # Lucro considerando a margem aplicada SOBRE o faturamento
+            profit = estimated_cost - expenses - refunds
         else:
             # Cálculo tradicional sem margem
             profit = revenue - expenses - refunds
         
-        profit_margin = (profit / revenue * 100) if revenue > 0 else 0
+        # CORREÇÃO: Calcular margem de lucro com validação
+        if revenue > 0:
+            profit_margin = (profit / revenue) * 100
+        else:
+            profit_margin = 0.0
         
         profitability_data.append({
             'unit': unit,
@@ -1207,7 +1214,7 @@ def profitability_report():
             'refunds': refunds,
             'profit': profit,
             'profit_margin': profit_margin,
-            'applied_margin': margin  # Adicionar margem aplicada
+            'applied_margin': margin
         })
     
     # Ordenar por lucro
@@ -1218,19 +1225,37 @@ def profitability_report():
     total_expenses = sum(data['expenses'] for data in profitability_data)
     total_refunds = sum(data['refunds'] for data in profitability_data)
     
-    # Aplicar margem no total
-    if margin > 0:
-        estimated_total_cost = total_revenue * (1 - margin / 100)
-        total_profit = total_revenue - estimated_total_cost - total_expenses - total_refunds
+    # CORREÇÃO: Aplicar margem no total com validação
+    if margin > 0 and total_revenue > 0:
+        estimated_total_cost = total_revenue * (margin / 100)
+        total_profit = estimated_total_cost - total_expenses - total_refunds
     else:
         total_profit = total_revenue - total_expenses - total_refunds
     
-    total_profit_margin = (total_profit / total_revenue * 100) if total_revenue > 0 else 0
+    # CORREÇÃO: Calcular margem total com validação
+    if total_revenue > 0:
+        total_profit_margin = (total_profit / total_revenue) * 100
+    else:
+        total_profit_margin = 0.0
     
-    # Dados para o gráfico
-    revenue_data = [{'name': data['unit']['name'], 'value': float(data['revenue'])} for data in profitability_data]
-    profit_data = [{'name': data['unit']['name'], 'value': float(data['profit'])} for data in profitability_data]
-    margin_data = [{'name': data['unit']['name'], 'value': float(data['profit_margin'])} for data in profitability_data]
+    # Dados para o gráfico - CORREÇÃO: Garantir valores numéricos
+    revenue_data = []
+    profit_data = []
+    margin_data = []
+    
+    for data in profitability_data:
+        revenue_data.append({
+            'name': data['unit']['name'], 
+            'value': float(data['revenue']) if data['revenue'] else 0.0
+        })
+        profit_data.append({
+            'name': data['unit']['name'], 
+            'value': float(data['profit']) if data['profit'] else 0.0
+        })
+        margin_data.append({
+            'name': data['unit']['name'], 
+            'value': float(data['profit_margin']) if data['profit_margin'] else 0.0
+        })
     
     cursor.close()
     conn.close()
@@ -1252,5 +1277,5 @@ def profitability_report():
         profit_data=json.dumps(profit_data),
         margin_data=json.dumps(margin_data),
         meses=MESES,
-        margin=margin  # Passar a margem para o template
+        margin=margin
     )

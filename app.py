@@ -873,6 +873,7 @@ def admin_delete_user(user_id):
     return redirect(url_for('admin_users_list'))
 
 # Rota para configurar valor base mensal do caixa
+# Rota para configurar valor base mensal do caixa - CORRIGIDA
 @app.route('/admin/unit/<int:unit_id>/monthly_base', methods=['GET', 'POST'])
 @login_required
 def admin_monthly_base(unit_id):
@@ -904,14 +905,63 @@ def admin_monthly_base(unit_id):
     )
     monthly_base = cursor.fetchone()
     
+    # CORREÇÃO: Buscar valor base do mês anterior de forma mais robusta
+    def get_previous_month_value(unit_id, current_month, current_year):
+        """Busca o valor base mais recente disponível, indo mês a mês para trás"""
+        search_month = current_month
+        search_year = current_year
+        
+        # Buscar pelos últimos 12 meses
+        for i in range(12):
+            # Calcular mês anterior
+            search_month = search_month - 1 if search_month > 1 else 12
+            if search_month == 12:
+                search_year -= 1
+            
+            cursor.execute(
+                "SELECT amount FROM monthly_base_amount WHERE unit_id = %s AND month = %s AND year = %s",
+                (unit_id, search_month, search_year)
+            )
+            result = cursor.fetchone()
+            
+            if result and result['amount'] > 0:
+                return result['amount']
+        
+        return 0
+    
+    # Obter valor do mês anterior
+    previous_month_amount = get_previous_month_value(unit_id, current_month, current_year)
+    
+    # CORREÇÃO: Se não existe valor para o mês atual e há valor anterior, criar automaticamente
+    if not monthly_base and previous_month_amount > 0:
+        try:
+            cursor.execute(
+                "INSERT INTO monthly_base_amount (unit_id, month, year, amount) VALUES (%s, %s, %s, %s)",
+                (unit_id, current_month, current_year, previous_month_amount)
+            )
+            conn.commit()
+            
+            # Buscar o registro recém-criado
+            cursor.execute(
+                "SELECT * FROM monthly_base_amount WHERE unit_id = %s AND month = %s AND year = %s",
+                (unit_id, current_month, current_year)
+            )
+            monthly_base = cursor.fetchone()
+            
+            flash(f'Valor base de R$ {previous_month_amount:.2f} herdado automaticamente do mês anterior!', 'info')
+            
+        except Exception as e:
+            conn.rollback()
+            print(f"Erro ao criar herança do valor base: {str(e)}")
+    
     if request.method == 'POST':
         amount = float(request.form.get('amount', 0))
         
         if monthly_base:
             # Atualizar valor existente
             cursor.execute(
-                "UPDATE monthly_base_amount SET amount = %s WHERE id = %s",
-                (amount, monthly_base['id'])
+                "UPDATE monthly_base_amount SET amount = %s, updated_at = %s WHERE id = %s",
+                (amount, get_brazil_datetime(), monthly_base['id'])
             )
         else:
             # Criar novo registro
@@ -924,9 +974,9 @@ def admin_monthly_base(unit_id):
         flash('Valor base mensal atualizado com sucesso!', 'success')
         return redirect(url_for('admin_units_list'))
     
-    # Obter histórico de valores base
+    # Obter histórico de valores base (últimos 12 meses)
     cursor.execute(
-        "SELECT month, year, amount FROM monthly_base_amount WHERE unit_id = %s ORDER BY year DESC, month DESC",
+        "SELECT month, year, amount FROM monthly_base_amount WHERE unit_id = %s ORDER BY year DESC, month DESC LIMIT 12",
         (unit_id,)
     )
     base_history = cursor.fetchall()
@@ -940,11 +990,144 @@ def admin_monthly_base(unit_id):
         monthly_base=monthly_base,
         current_month=current_month,
         current_year=current_year,
-        month_name=MESES[current_month],  # Usando MESES em vez de calendar.month_name
+        month_name=MESES[current_month],
         base_history=base_history,
         calendar=calendar,
-        meses=MESES  # Passar o dicionário inteiro para o template
+        meses=MESES
     )
+# NOVA FUNÇÃO: Auxiliar para cálculos de saldo com integração de pagamentos
+def calculate_base_amount_with_integration(unit_id, month, year):
+    """
+    Calcula o valor base atualizado considerando movimentações de dinheiro e PIX.
+    Esta função garante que TODOS os tipos de movimentação afetem o valor base.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # Obter valor base do mês
+        cursor.execute(
+            "SELECT amount FROM monthly_base_amount WHERE unit_id = %s AND month = %s AND year = %s",
+            (unit_id, month, year)
+        )
+        base_result = cursor.fetchone()
+        base_amount = float(base_result['amount']) if base_result else 0.0
+        
+        # CORREÇÃO: Calcular todas as movimentações que afetam dinheiro/PIX
+        cursor.execute(
+            """
+            SELECT 
+                COALESCE(SUM(
+                    CASE 
+                        WHEN m.type = 'entrada' AND pm.category IN ('dinheiro', 'pix') THEN m.amount
+                        WHEN m.type = 'saida' AND pm.category IN ('dinheiro', 'pix') THEN -m.amount
+                        WHEN m.type = 'despesa_loja' AND pm.category IN ('dinheiro', 'pix') THEN -m.amount
+                        WHEN m.type = 'estorno' AND pm.category IN ('dinheiro', 'pix') THEN -m.amount
+                        ELSE 0
+                    END
+                ), 0) as saldo_movimentacoes
+            FROM movement m
+            JOIN cashier c ON m.cashier_id = c.id
+            JOIN payment_method pm ON m.payment_method = pm.id
+            WHERE c.unit_id = %s
+            """,
+            (unit_id,)
+        )
+        
+        movimentacoes_result = cursor.fetchone()
+        saldo_movimentacoes = float(movimentacoes_result['saldo_movimentacoes']) if movimentacoes_result else 0.0
+        
+        # Valor base final = base inicial + movimentações
+        base_amount_final = base_amount + saldo_movimentacoes
+        
+        cursor.close()
+        conn.close()
+        
+        return {
+            'base_inicial': base_amount,
+            'movimentacoes': saldo_movimentacoes,
+            'base_final': base_amount_final
+        }
+        
+    except Exception as e:
+        cursor.close()
+        conn.close()
+        print(f"Erro no cálculo do valor base: {str(e)}")
+        return {
+            'base_inicial': 0.0,
+            'movimentacoes': 0.0,
+            'base_final': 0.0
+        }
+
+# FUNÇÃO DE TESTE: Verificar integração de pagamentos
+def test_payment_integration(unit_id):
+    """
+    Função de teste para verificar se a integração está funcionando corretamente.
+    Esta função pode ser chamada para debug durante o desenvolvimento.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    today = get_brazil_datetime()
+    
+    try:
+        print(f"\n=== TESTE DE INTEGRAÇÃO DE PAGAMENTOS - UNIDADE {unit_id} ===")
+        
+        # Verificar valor base do mês atual
+        base_info = calculate_base_amount_with_integration(unit_id, today.month, today.year)
+        print(f"Valor base inicial: R$ {base_info['base_inicial']:.2f}")
+        print(f"Movimentações acumuladas: R$ {base_info['movimentacoes']:.2f}")
+        print(f"Valor base final: R$ {base_info['base_final']:.2f}")
+        
+        # Verificar movimentações por caixa
+        cursor.execute("SELECT * FROM cashier WHERE unit_id = %s ORDER BY number", (unit_id,))
+        cashiers = cursor.fetchall()
+        
+        print(f"\n--- MOVIMENTAÇÕES POR CAIXA ---")
+        for cashier in cashiers:
+            cursor.execute(
+                """
+                SELECT 
+                    m.type,
+                    pm.category,
+                    COUNT(*) as qtd,
+                    SUM(m.amount) as total
+                FROM movement m
+                JOIN payment_method pm ON m.payment_method = pm.id
+                WHERE m.cashier_id = %s
+                GROUP BY m.type, pm.category
+                ORDER BY m.type, pm.category
+                """,
+                (cashier['id'],)
+            )
+            movs = cursor.fetchall()
+            
+            if movs:
+                print(f"\nCaixa {cashier['number']}:")
+                for mov in movs:
+                    print(f"  {mov['type']} - {mov['category']}: {mov['qtd']} mov(s) = R$ {mov['total']:.2f}")
+        
+        cursor.close()
+        conn.close()
+        
+        print(f"\n=== FIM DO TESTE ===\n")
+        
+    except Exception as e:
+        cursor.close()
+        conn.close()
+        print(f"Erro no teste: {str(e)}")
+
+# Adicionar rota de teste (REMOVER EM PRODUÇÃO)
+@app.route('/test/payment_integration/<int:unit_id>')
+@login_required
+def test_payment_integration_route(unit_id):
+    """ROTA DE TESTE - REMOVER EM PRODUÇÃO"""
+    if not current_user.is_superuser:
+        return "Acesso negado", 403
+    
+    test_payment_integration(unit_id)
+    flash('Teste de integração executado. Verifique os logs do servidor.', 'info')
+    return redirect(url_for('user_cashiers', unit_id=unit_id))
 
 # Rotas para Unidades (Admin)
 @app.route('/admin/units')
@@ -1323,27 +1506,30 @@ def user_cashiers(unit_id):
             )
             conn.commit()
     
-    # Calcular saldo acumulado de dinheiro e PIX (valor base do mês)
+    # CORREÇÃO: Calcular saldo acumulado de dinheiro e PIX incluindo ESTORNOS de todos os caixas
     cursor.execute(
         """
-        SELECT SUM(
+        SELECT COALESCE(SUM(
             CASE 
                 WHEN m.type = 'entrada' AND pm.category IN ('dinheiro', 'pix') THEN m.amount
-                WHEN m.type IN ('saida', 'despesa_loja') AND pm.category IN ('dinheiro', 'pix') THEN -m.amount
+                WHEN m.type = 'saida' AND pm.category IN ('dinheiro', 'pix') THEN -m.amount
+                WHEN m.type = 'despesa_loja' AND pm.category IN ('dinheiro', 'pix') THEN -m.amount
+                WHEN m.type = 'estorno' AND pm.category IN ('dinheiro', 'pix') THEN -m.amount
                 ELSE 0
             END
-        ) as saldo_dinheiro
+        ), 0) as saldo_dinheiro
         FROM movement m
+        JOIN cashier c ON m.cashier_id = c.id
         JOIN payment_method pm ON m.payment_method = pm.id
-        WHERE m.cashier_id IN (SELECT id FROM cashier WHERE unit_id = %s)
+        WHERE c.unit_id = %s
         """,
         (unit_id,)
     )
     saldo_result = cursor.fetchone()
-    saldo_acumulado = saldo_result['saldo_dinheiro'] if saldo_result['saldo_dinheiro'] else 0
+    saldo_acumulado = float(saldo_result['saldo_dinheiro']) if saldo_result['saldo_dinheiro'] else 0.0
     
     # Valor base atualizado (base inicial + movimentações de dinheiro/PIX)
-    base_amount_atual = base_amount + saldo_acumulado
+    base_amount_atual = float(base_amount) + saldo_acumulado
     
     # Obter o controle de moedas
     cursor.execute("SELECT * FROM coins_control WHERE unit_id = %s", (unit_id,))
@@ -1388,65 +1574,94 @@ def user_cashiers(unit_id):
                 conn.commit()
                 cashier['status'] = new_status
         
-        # Obter totais
+        # CORREÇÃO: Obter totais incluindo estornos corretamente
         cursor.execute(
-            "SELECT SUM(CASE WHEN type = 'entrada' THEN amount ELSE 0 END) as total_entrada, "
-            "SUM(CASE WHEN type = 'saida' OR type = 'despesa_loja' OR type = 'estorno' THEN amount ELSE 0 END) as total_saida "
-            "FROM movement "
-            "WHERE cashier_id = %s AND created_at BETWEEN %s AND %s",
+            """
+            SELECT 
+                COALESCE(SUM(CASE WHEN type = 'entrada' THEN amount ELSE 0 END), 0) as total_entrada,
+                COALESCE(SUM(CASE WHEN type IN ('saida', 'despesa_loja') THEN amount ELSE 0 END), 0) as total_saida,
+                COALESCE(SUM(CASE WHEN type = 'estorno' THEN amount ELSE 0 END), 0) as total_estorno
+            FROM movement 
+            WHERE cashier_id = %s AND created_at BETWEEN %s AND %s
+            """,
             (cashier['id'], start_date, end_date)
         )
         result = cursor.fetchone()
         
         if result:
-            entrada = result['total_entrada'] or 0
-            saida = result['total_saida'] or 0
+            entrada = float(result['total_entrada']) if result['total_entrada'] else 0.0
+            saida = float(result['total_saida']) if result['total_saida'] else 0.0
+            estorno = float(result['total_estorno']) if result['total_estorno'] else 0.0
+            
+            # CORREÇÃO: Saldo = entradas - saídas - estornos
+            saldo = entrada - saida - estorno
+            
             cashier_totals[cashier['id']] = {
                 'entrada': entrada,
                 'saida': saida,
-                'saldo': entrada - saida
+                'estorno': estorno,
+                'saldo': saldo
             }
         else:
-            cashier_totals[cashier['id']] = {'entrada': 0, 'saida': 0, 'saldo': 0}
+            cashier_totals[cashier['id']] = {
+                'entrada': 0.0, 
+                'saida': 0.0, 
+                'estorno': 0.0, 
+                'saldo': 0.0
+            }
     
-    # Obter totais gerais
+    # CORREÇÃO: Obter totais gerais incluindo estornos
     cursor.execute(
-        "SELECT SUM(CASE WHEN type = 'entrada' THEN amount ELSE 0 END) as total_entrada, "
-        "SUM(CASE WHEN type = 'saida' OR type = 'despesa_loja' OR type = 'estorno' THEN amount ELSE 0 END) as total_saida "
-        "FROM movement "
-        "WHERE cashier_id IN (SELECT id FROM cashier WHERE unit_id = %s) "
-        "AND created_at BETWEEN %s AND %s",
+        """
+        SELECT 
+            COALESCE(SUM(CASE WHEN type = 'entrada' THEN amount ELSE 0 END), 0) as total_entrada,
+            COALESCE(SUM(CASE WHEN type IN ('saida', 'despesa_loja') THEN amount ELSE 0 END), 0) as total_saida,
+            COALESCE(SUM(CASE WHEN type = 'estorno' THEN amount ELSE 0 END), 0) as total_estorno
+        FROM movement 
+        WHERE cashier_id IN (SELECT id FROM cashier WHERE unit_id = %s) 
+        AND created_at BETWEEN %s AND %s
+        """,
         (unit_id, start_date, end_date)
     )
     totals = cursor.fetchone()
     
-    total_entrada = totals['total_entrada'] or 0
-    total_saida = totals['total_saida'] or 0
-    saldo_dia = total_entrada - total_saida
+    total_entrada = float(totals['total_entrada']) if totals['total_entrada'] else 0.0
+    total_saida = float(totals['total_saida']) if totals['total_saida'] else 0.0
+    total_estorno = float(totals['total_estorno']) if totals['total_estorno'] else 0.0
+    
+    # CORREÇÃO: Saldo do dia = entradas - saídas - estornos
+    saldo_dia = total_entrada - total_saida - total_estorno
     
     # Obter somatório de todos os Z do dia
     cursor.execute(
-        "SELECT SUM(z_value) as total_z FROM pdv_z_values "
+        "SELECT COALESCE(SUM(z_value), 0) as total_z FROM pdv_z_values "
         "WHERE cashier_id IN (SELECT id FROM cashier WHERE unit_id = %s) "
         "AND date = %s",
         (unit_id, today_date)
     )
     z_result = cursor.fetchone()
-    total_z = z_result['total_z'] if z_result and z_result['total_z'] else 0
+    total_z = float(z_result['total_z']) if z_result and z_result['total_z'] else 0.0
     
-    # Calcular saldo do caixa financeiro
+    # CORREÇÃO: Calcular saldo do caixa financeiro incluindo todos os movimentos
     cursor.execute(
-        "SELECT SUM(CASE WHEN type = 'entrada' THEN amount ELSE 0 END) as total_entrada, "
-        "SUM(CASE WHEN type = 'saida' OR type = 'despesa_loja' OR type = 'estorno' THEN amount ELSE 0 END) as total_saida "
-        "FROM movement "
-        "WHERE cashier_id IN (SELECT id FROM cashier WHERE unit_id = %s)",
+        """
+        SELECT 
+            COALESCE(SUM(CASE WHEN type = 'entrada' THEN amount ELSE 0 END), 0) as total_entrada,
+            COALESCE(SUM(CASE WHEN type IN ('saida', 'despesa_loja') THEN amount ELSE 0 END), 0) as total_saida,
+            COALESCE(SUM(CASE WHEN type = 'estorno' THEN amount ELSE 0 END), 0) as total_estorno
+        FROM movement 
+        WHERE cashier_id IN (SELECT id FROM cashier WHERE unit_id = %s)
+        """,
         (unit_id,)
     )
     all_time_totals = cursor.fetchone()
     
-    all_time_entrada = all_time_totals['total_entrada'] or 0
-    all_time_saida = all_time_totals['total_saida'] or 0
-    financial_balance = all_time_entrada - all_time_saida
+    all_time_entrada = float(all_time_totals['total_entrada']) if all_time_totals['total_entrada'] else 0.0
+    all_time_saida = float(all_time_totals['total_saida']) if all_time_totals['total_saida'] else 0.0
+    all_time_estorno = float(all_time_totals['total_estorno']) if all_time_totals['total_estorno'] else 0.0
+    
+    # CORREÇÃO: Saldo financeiro = entradas - saídas - estornos
+    financial_balance = all_time_entrada - all_time_saida - all_time_estorno
     
     cursor.close()
     conn.close()
@@ -1458,6 +1673,7 @@ def user_cashiers(unit_id):
         cashier_totals=cashier_totals,
         total_entrada=total_entrada,
         total_saida=total_saida,
+        total_estorno=total_estorno,
         saldo_dia=saldo_dia,
         base_amount=base_amount_atual,
         coins_amount=coins_amount,
@@ -1962,6 +2178,7 @@ def user_edit_profile():
 def user_monthly_base(unit_id):
     """
     Rota para configuração do valor base mensal por usuários comuns.
+    CORRIGIDO: Herança automática do valor base do mês anterior
     """
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -2001,16 +2218,54 @@ def user_monthly_base(unit_id):
     )
     monthly_base = cursor.fetchone()
     
-    # Obter valor do mês anterior para referência
-    prev_month = current_month - 1 if current_month > 1 else 12
-    prev_year = current_year if current_month > 1 else current_year - 1
+    # CORREÇÃO: Buscar valor base do mês anterior de forma mais robusta
+    def get_previous_month_value(unit_id, current_month, current_year):
+        """Busca o valor base mais recente disponível, indo mês a mês para trás"""
+        search_month = current_month
+        search_year = current_year
+        
+        # Buscar pelos últimos 12 meses
+        for i in range(12):
+            # Calcular mês anterior
+            search_month = search_month - 1 if search_month > 1 else 12
+            if search_month == 12:
+                search_year -= 1
+            
+            cursor.execute(
+                "SELECT amount FROM monthly_base_amount WHERE unit_id = %s AND month = %s AND year = %s",
+                (unit_id, search_month, search_year)
+            )
+            result = cursor.fetchone()
+            
+            if result and result['amount'] > 0:
+                return result['amount']
+        
+        return 0
     
-    cursor.execute(
-        "SELECT amount FROM monthly_base_amount WHERE unit_id = %s AND month = %s AND year = %s",
-        (unit_id, prev_month, prev_year)
-    )
-    prev_month_result = cursor.fetchone()
-    previous_month_amount = prev_month_result['amount'] if prev_month_result else 0
+    # Obter valor do mês anterior
+    previous_month_amount = get_previous_month_value(unit_id, current_month, current_year)
+    
+    # CORREÇÃO: Se não existe valor para o mês atual e há valor anterior, criar automaticamente
+    if not monthly_base and previous_month_amount > 0:
+        try:
+            cursor.execute(
+                "INSERT INTO monthly_base_amount (unit_id, month, year, amount) VALUES (%s, %s, %s, %s)",
+                (unit_id, current_month, current_year, previous_month_amount)
+            )
+            conn.commit()
+            
+            # Buscar o registro recém-criado
+            cursor.execute(
+                "SELECT * FROM monthly_base_amount WHERE unit_id = %s AND month = %s AND year = %s",
+                (unit_id, current_month, current_year)
+            )
+            monthly_base = cursor.fetchone()
+            
+            flash(f'Valor base de R$ {previous_month_amount:.2f} herdado automaticamente do mês anterior!', 'info')
+            
+        except Exception as e:
+            conn.rollback()
+            print(f"Erro ao criar herança do valor base: {str(e)}")
     
     if request.method == 'POST':
         amount = float(request.form.get('amount', 0))
@@ -2018,8 +2273,8 @@ def user_monthly_base(unit_id):
         if monthly_base:
             # Atualizar valor existente
             cursor.execute(
-                "UPDATE monthly_base_amount SET amount = %s WHERE id = %s",
-                (amount, monthly_base['id'])
+                "UPDATE monthly_base_amount SET amount = %s, updated_at = %s WHERE id = %s",
+                (amount, get_brazil_datetime(), monthly_base['id'])
             )
         else:
             # Criar novo registro
@@ -2034,7 +2289,7 @@ def user_monthly_base(unit_id):
         # Redirecionar para distribuição do valor base
         return redirect(url_for('user_distribute_base', unit_id=unit_id))
     
-    # Obter histórico de valores base
+    # Obter histórico de valores base (últimos 12 meses)
     cursor.execute(
         "SELECT month, year, amount FROM monthly_base_amount WHERE unit_id = %s ORDER BY year DESC, month DESC LIMIT 12",
         (unit_id,)
@@ -2050,11 +2305,11 @@ def user_monthly_base(unit_id):
         monthly_base=monthly_base,
         current_month=current_month,
         current_year=current_year,
-        month_name=MESES[current_month],  # Usando MESES em vez de calendar.month_name
+        month_name=MESES[current_month],
         base_history=base_history,
         calendar=calendar,
         previous_month_amount=previous_month_amount,
-        meses=MESES  # Passar o dicionário inteiro para o template
+        meses=MESES
     )
 
 @app.route('/user/unit/<int:unit_id>/distribute_base', methods=['GET', 'POST'])
