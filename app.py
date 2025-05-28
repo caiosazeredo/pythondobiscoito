@@ -1506,7 +1506,10 @@ def user_cashiers(unit_id):
             )
             conn.commit()
     
-    # CORREÇÃO: Calcular saldo acumulado de dinheiro e PIX incluindo ESTORNOS de todos os caixas
+    # CORREÇÃO: Calcular "Dinheiro/PIX Hoje" EXCLUINDO estornos (só entradas PIX e saídas financeiro)
+    start_of_today = datetime(today.year, today.month, today.day, 0, 0, 0)
+    end_of_today = datetime(today.year, today.month, today.day, 23, 59, 59)
+    
     cursor.execute(
         """
         SELECT COALESCE(SUM(
@@ -1514,22 +1517,22 @@ def user_cashiers(unit_id):
                 WHEN m.type = 'entrada' AND pm.category IN ('dinheiro', 'pix') THEN m.amount
                 WHEN m.type = 'saida' AND pm.category IN ('dinheiro', 'pix') THEN -m.amount
                 WHEN m.type = 'despesa_loja' AND pm.category IN ('dinheiro', 'pix') THEN -m.amount
-                WHEN m.type = 'estorno' AND pm.category IN ('dinheiro', 'pix') THEN -m.amount
                 ELSE 0
             END
-        ), 0) as saldo_dinheiro
+        ), 0) as saldo_dinheiro_hoje
         FROM movement m
         JOIN cashier c ON m.cashier_id = c.id
         JOIN payment_method pm ON m.payment_method = pm.id
-        WHERE c.unit_id = %s
+        WHERE c.unit_id = %s AND m.created_at BETWEEN %s AND %s
         """,
-        (unit_id,)
+        (unit_id, start_of_today, end_of_today)
     )
-    saldo_result = cursor.fetchone()
-    saldo_acumulado = float(saldo_result['saldo_dinheiro']) if saldo_result['saldo_dinheiro'] else 0.0
+    saldo_hoje_result = cursor.fetchone()
+    saldo_dinheiro_hoje = float(saldo_hoje_result['saldo_dinheiro_hoje']) if saldo_hoje_result['saldo_dinheiro_hoje'] else 0.0
     
-    # Valor base atualizado (base inicial + movimentações de dinheiro/PIX)
-    base_amount_atual = float(base_amount) + saldo_acumulado
+    # CORREÇÃO: Valor base atual = valor base fixo (NÃO inclui movimentações)
+    # O valor base não muda com as movimentações, apenas o "Dinheiro/PIX Hoje"
+    base_amount_atual = float(base_amount)
     
     # Obter o controle de moedas
     cursor.execute("SELECT * FROM coins_control WHERE unit_id = %s", (unit_id,))
@@ -1549,7 +1552,7 @@ def user_cashiers(unit_id):
             conn.rollback()
             flash(f'Erro ao criar controle de moedas: {str(e)}', 'error')
     
-    # Obter totais de movimentos do dia para cada caixa
+    # Obter totais de movimentos do dia para cada caixa (INCLUINDO estornos para visualização)
     start_date = datetime(today.year, today.month, today.day, 0, 0, 0)
     end_date = datetime(today.year, today.month, today.day, 23, 59, 59)
     today_date = today.date()
@@ -1574,7 +1577,7 @@ def user_cashiers(unit_id):
                 conn.commit()
                 cashier['status'] = new_status
         
-        # CORREÇÃO: Obter totais incluindo estornos corretamente
+        # Obter totais incluindo estornos para visualização do saldo do caixa
         cursor.execute(
             """
             SELECT 
@@ -1593,7 +1596,7 @@ def user_cashiers(unit_id):
             saida = float(result['total_saida']) if result['total_saida'] else 0.0
             estorno = float(result['total_estorno']) if result['total_estorno'] else 0.0
             
-            # CORREÇÃO: Saldo = entradas - saídas - estornos
+            # Saldo do caixa = entradas - saídas - estornos (para visualização)
             saldo = entrada - saida - estorno
             
             cashier_totals[cashier['id']] = {
@@ -1610,7 +1613,7 @@ def user_cashiers(unit_id):
                 'saldo': 0.0
             }
     
-    # CORREÇÃO: Obter totais gerais incluindo estornos
+    # Obter totais gerais incluindo estornos (para visualização do saldo do dia)
     cursor.execute(
         """
         SELECT 
@@ -1629,7 +1632,7 @@ def user_cashiers(unit_id):
     total_saida = float(totals['total_saida']) if totals['total_saida'] else 0.0
     total_estorno = float(totals['total_estorno']) if totals['total_estorno'] else 0.0
     
-    # CORREÇÃO: Saldo do dia = entradas - saídas - estornos
+    # Saldo do dia = entradas - saídas - estornos (para visualização)
     saldo_dia = total_entrada - total_saida - total_estorno
     
     # Obter somatório de todos os Z do dia
@@ -1642,7 +1645,7 @@ def user_cashiers(unit_id):
     z_result = cursor.fetchone()
     total_z = float(z_result['total_z']) if z_result and z_result['total_z'] else 0.0
     
-    # CORREÇÃO: Calcular saldo do caixa financeiro incluindo todos os movimentos
+    # Calcular saldo do caixa financeiro (todas as movimentações históricas para visualização)
     cursor.execute(
         """
         SELECT 
@@ -1660,7 +1663,7 @@ def user_cashiers(unit_id):
     all_time_saida = float(all_time_totals['total_saida']) if all_time_totals['total_saida'] else 0.0
     all_time_estorno = float(all_time_totals['total_estorno']) if all_time_totals['total_estorno'] else 0.0
     
-    # CORREÇÃO: Saldo financeiro = entradas - saídas - estornos
+    # Saldo financeiro = entradas - saídas - estornos (para visualização)
     financial_balance = all_time_entrada - all_time_saida - all_time_estorno
     
     cursor.close()
@@ -1675,7 +1678,8 @@ def user_cashiers(unit_id):
         total_saida=total_saida,
         total_estorno=total_estorno,
         saldo_dia=saldo_dia,
-        base_amount=base_amount_atual,
+        base_amount=base_amount_atual,  # Valor base fixo
+        saldo_dinheiro_hoje=saldo_dinheiro_hoje,  # Dinheiro/PIX do dia (sem estornos)
         coins_amount=coins_amount,
         financial_balance=financial_balance,
         financial_cashier_id=financial_cashier_id,
@@ -2218,34 +2222,43 @@ def user_monthly_base(unit_id):
     )
     monthly_base = cursor.fetchone()
     
-    # CORREÇÃO: Buscar valor base do mês anterior de forma mais robusta
-    def get_previous_month_value(unit_id, current_month, current_year):
-        """Busca o valor base mais recente disponível, indo mês a mês para trás"""
+    # CORREÇÃO COMPLETA: Buscar valor base mais recente dos últimos 12 meses
+    def get_most_recent_base_value(unit_id, current_month, current_year):
+        """Busca o valor base mais recente disponível nos últimos 12 meses"""
         search_month = current_month
         search_year = current_year
         
-        # Buscar pelos últimos 12 meses
-        for i in range(12):
+        # Buscar pelos últimos 12 meses, começando pelo mês anterior
+        for i in range(1, 13):  # Começar do mês anterior (i=1)
             # Calcular mês anterior
             search_month = search_month - 1 if search_month > 1 else 12
-            if search_month == 12:
+            if search_month == 12 and i == 1:  # Só diminui o ano na primeira iteração
+                search_year -= 1
+            elif search_month == 12 and i > 1:
                 search_year -= 1
             
             cursor.execute(
-                "SELECT amount FROM monthly_base_amount WHERE unit_id = %s AND month = %s AND year = %s",
+                "SELECT amount, month, year FROM monthly_base_amount WHERE unit_id = %s AND month = %s AND year = %s",
                 (unit_id, search_month, search_year)
             )
             result = cursor.fetchone()
             
-            if result and result['amount'] > 0:
-                return result['amount']
+            if result and result['amount'] and result['amount'] > 0:
+                print(f"HERANÇA: Encontrou valor base R$ {result['amount']} em {search_month}/{search_year}")
+                return {
+                    'amount': result['amount'],
+                    'month': result['month'],
+                    'year': result['year']
+                }
         
-        return 0
+        print("HERANÇA: Nenhum valor base anterior encontrado")
+        return None
     
-    # Obter valor do mês anterior
-    previous_month_amount = get_previous_month_value(unit_id, current_month, current_year)
+    # Obter valor do mês mais recente disponível
+    previous_base_data = get_most_recent_base_value(unit_id, current_month, current_year)
+    previous_month_amount = previous_base_data['amount'] if previous_base_data else 0
     
-    # CORREÇÃO: Se não existe valor para o mês atual e há valor anterior, criar automaticamente
+    # CORREÇÃO: Se não existe valor para o mês atual E há valor anterior, criar automaticamente
     if not monthly_base and previous_month_amount > 0:
         try:
             cursor.execute(
@@ -2261,7 +2274,7 @@ def user_monthly_base(unit_id):
             )
             monthly_base = cursor.fetchone()
             
-            flash(f'Valor base de R$ {previous_month_amount:.2f} herdado automaticamente do mês anterior!', 'info')
+            flash(f'Valor base de R$ {previous_month_amount:.2f} herdado automaticamente de {MESES[previous_base_data["month"]]}/{previous_base_data["year"]}!', 'success')
             
         except Exception as e:
             conn.rollback()

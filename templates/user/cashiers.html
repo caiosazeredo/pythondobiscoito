@@ -50,9 +50,21 @@
                                 <div class="text-warning mb-2">
                                     <i class="bi bi-currency-dollar fs-1"></i>
                                 </div>
-                                <h5 class="mb-1">Valor em Caixa</h5>
-                                <h3 class="text-success">R$ {{ "%.2f"|format(base_amount) }}</h3>
-                                <small class="text-muted">Base + Movimentações</small>
+                                <h5 class="mb-1">Valor Base Atual</h5>
+                                <h3 class="text-primary">R$ {{ "%.2f"|format(base_amount) }}</h3>
+                                <small class="text-muted">Fixo do Mês</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="d-flex flex-column align-items-center">
+                                <div class="text-warning mb-2">
+                                    <i class="bi bi-cash fs-1"></i>
+                                </div>
+                                <h5 class="mb-1">Dinheiro/PIX Hoje</h5>
+                                <h3 class="{{ 'text-success' if saldo_dinheiro_hoje >= 0 else 'text-danger' }}">
+                                    R$ {{ "%.2f"|format(saldo_dinheiro_hoje) }}
+                                </h3>
+                                <small class="text-muted">Apenas do Dia</small>
                             </div>
                         </div>
                         <div class="col-md-3">
@@ -62,18 +74,6 @@
                                 </div>
                                 <h5 class="mb-1">Moedas Disponíveis</h5>
                                 <h3 class="text-success">R$ {{ "%.2f"|format(coins_amount) }}</h3>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="d-flex flex-column align-items-center">
-                                <div class="text-warning mb-2">
-                                    <i class="bi bi-wallet2 fs-1"></i>
-                                </div>
-                                <h5 class="mb-1">Saldo do Dia</h5>
-                                <h3 class="{{ 'text-success' if saldo_dia >= 0 else 'text-danger' }}">
-                                    R$ {{ "%.2f"|format(saldo_dia) }}
-                                </h3>
-                                <small class="text-muted">Entrada - Saída - Estorno</small>
                             </div>
                         </div>
                         <div class="col-md-3">
@@ -108,14 +108,14 @@
                         </div>
                         
                         <div class="d-flex justify-content-between mb-2">
-                            <span class="text-muted">Valor em Caixa:</span>
-                            <span class="fw-bold">R$ {{ "%.2f"|format(base_amount) }}</span>
+                            <span class="text-muted">Valor Base:</span>
+                            <span class="fw-bold text-primary">R$ {{ "%.2f"|format(base_amount) }}</span>
                         </div>
                         
                         <div class="d-flex justify-content-between mb-2">
-                            <span class="text-muted">Saldo Total:</span>
-                            <span class="fw-bold {{ 'text-success' if financial_balance >= 0 else 'text-danger' }}">
-                                R$ {{ "%.2f"|format(financial_balance + base_amount) }}
+                            <span class="text-muted">Dinheiro/PIX Hoje:</span>
+                            <span class="fw-bold {{ 'text-success' if saldo_dinheiro_hoje >= 0 else 'text-danger' }}">
+                                R$ {{ "%.2f"|format(saldo_dinheiro_hoje) }}
                             </span>
                         </div>
                         
@@ -188,7 +188,7 @@
                         {% endif %}
                         
                         <div class="d-flex justify-content-between">
-                            <span class="text-muted fw-bold">Saldo:</span>
+                            <span class="text-muted fw-bold">Saldo do Dia:</span>
                             <span class="fw-bold {{ 'text-success' if cashier_totals[cashier.id].saldo >= 0 else 'text-danger' }}">
                                 R$ {{ "%.2f"|format(cashier_totals[cashier.id].saldo) }}
                             </span>

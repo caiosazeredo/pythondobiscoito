@@ -502,64 +502,52 @@
             }
         });
         
-        // Gráfico de margem
+        // CORREÇÃO: Gráfico de margem - era o que estava faltando!
         const marginCtx = document.getElementById('marginChart').getContext('2d');
         
         new Chart(marginCtx, {
-            type: 'bar',
+            type: 'doughnut',
             data: {
                 labels: marginData.map(item => item.name),
                 datasets: [{
                     label: 'Margem de Lucro (%)',
-                    data: marginData.map(item => item.value),
-                    backgroundColor: function(context) {
-                        const value = context.parsed.x;
-                        if (value >= 15) return 'rgba(76, 175, 80, 0.7)';  // Verde para excelente
-                        if (value >= 5) return 'rgba(255, 193, 7, 0.7)';   // Amarelo para boa
-                        return 'rgba(244, 67, 54, 0.7)';                    // Vermelho para atenção
-                    },
-                    borderColor: function(context) {
-                        const value = context.parsed.x;
+                    data: marginData.map(item => Math.abs(item.value)), // Usar valor absoluto para o gráfico
+                    backgroundColor: marginData.map(item => {
+                        const value = item.value;
+                        if (value >= 15) return 'rgba(76, 175, 80, 0.8)';  // Verde para excelente
+                        if (value >= 5) return 'rgba(255, 193, 7, 0.8)';   // Amarelo para boa
+                        return 'rgba(244, 67, 54, 0.8)';                    // Vermelho para atenção
+                    }),
+                    borderColor: marginData.map(item => {
+                        const value = item.value;
                         if (value >= 15) return 'rgba(76, 175, 80, 1)';
                         if (value >= 5) return 'rgba(255, 193, 7, 1)';
                         return 'rgba(244, 67, 54, 1)';
-                    },
-                    borderWidth: 1,
-                    borderRadius: 4
+                    }),
+                    borderWidth: 2
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                indexAxis: 'y',
-                scales: {
-                    x: {
-                        beginAtZero: true,
-                        grid: {
-                            color: 'rgba(0, 0, 0, 0.05)'
-                        },
-                        ticks: {
-                            callback: function(value) {
-                                return value + '%';
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            boxWidth: 12,
+                            padding: 10,
+                            font: {
+                                size: 11
                             }
                         }
                     },
-                    y: {
-                        grid: {
-                            display: false
-                        }
-                    }
-                },
-                plugins: {
                     tooltip: {
                         callbacks: {
                             label: function(context) {
-                                return context.dataset.label + ': ' + context.parsed.x.toFixed(1) + '%';
+                                const originalValue = marginData[context.dataIndex].value;
+                                return context.label + ': ' + originalValue.toFixed(1) + '%';
                             }
                         }
-                    },
-                    legend: {
-                        display: false
                     }
                 }
             }
