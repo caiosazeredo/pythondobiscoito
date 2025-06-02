@@ -411,9 +411,6 @@ def initialize_database():
     cursor.close()
     conn.close()
 
-@app.before_first_request
-def create_tables():
-    initialize_database()
 @app.route('/favicon.ico')
 def favicon():
     return send_from_directory(os.path.join(app.root_path, 'static'),
@@ -1426,28 +1423,15 @@ def user_cashiers(unit_id):
             flash('Acesso não autorizado a esta unidade!', 'error')
             return redirect(url_for('user_home'))
     
-    # Verificar se o Caixa Financeiro existe e criar se não existir
-    cursor.execute(
-        "SELECT * FROM cashier WHERE unit_id = %s AND number = 0",
-        (unit_id,)
-    )
-    financial_cashier = cursor.fetchone()
-    financial_cashier_id = None
-    
-    if financial_cashier:
-        financial_cashier_id = financial_cashier['id']
-    else:
-        # Criar o Caixa Financeiro
+    # Obter data selecionada ou usar data atual
+    selected_date_str = request.args.get('date')
+    if selected_date_str:
         try:
-            cursor.execute(
-                "INSERT INTO cashier (unit_id, number, status) VALUES (%s, %s, %s)",
-                (unit_id, 0, 'aberto')
-            )
-            conn.commit()
-            financial_cashier_id = cursor.lastrowid
-        except Exception as e:
-            conn.rollback()
-            flash(f'Erro ao criar Caixa Financeiro: {str(e)}', 'error')
+            selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d')
+        except ValueError:
+            selected_date = get_brazil_datetime()
+    else:
+        selected_date = get_brazil_datetime()
     
     # Verificar se é para criar um novo caixa
     if request.args.get('create') == 'true' and current_user.is_superuser:
@@ -1471,6 +1455,29 @@ def user_cashiers(unit_id):
             conn.rollback()
             flash(f'Erro ao criar caixa: {str(e)}', 'error')
     
+    # Verificar se o Caixa Financeiro existe e criar se não existir
+    cursor.execute(
+        "SELECT * FROM cashier WHERE unit_id = %s AND number = 0",
+        (unit_id,)
+    )
+    financial_cashier = cursor.fetchone()
+    financial_cashier_id = None
+    
+    if financial_cashier:
+        financial_cashier_id = financial_cashier['id']
+    else:
+        # Criar o Caixa Financeiro
+        try:
+            cursor.execute(
+                "INSERT INTO cashier (unit_id, number, status) VALUES (%s, %s, %s)",
+                (unit_id, 0, 'aberto')
+            )
+            conn.commit()
+            financial_cashier_id = cursor.lastrowid
+        except Exception as e:
+            conn.rollback()
+            flash(f'Erro ao criar Caixa Financeiro: {str(e)}', 'error')
+    
     # Obter todos os caixas da unidade
     cursor.execute(
         "SELECT * FROM cashier WHERE unit_id = %s ORDER BY number",
@@ -1478,19 +1485,18 @@ def user_cashiers(unit_id):
     )
     cashiers = cursor.fetchall()
     
-    # Obter valor base mensal da unidade para o mês atual
-    today = get_brazil_datetime()
+    # Obter valor base mensal da unidade para o mês da data selecionada
     cursor.execute(
         "SELECT * FROM monthly_base_amount WHERE unit_id = %s AND month = %s AND year = %s",
-        (unit_id, today.month, today.year)
+        (unit_id, selected_date.month, selected_date.year)
     )
     monthly_base = cursor.fetchone()
     base_amount = monthly_base['amount'] if monthly_base else 0
     
-    # Se não existir valor base para o mês atual, pegar do mês anterior
+    # Se não existir valor base para o mês selecionado, pegar do mês anterior
     if not monthly_base:
-        prev_month = today.month - 1 if today.month > 1 else 12
-        prev_year = today.year if today.month > 1 else today.year - 1
+        prev_month = selected_date.month - 1 if selected_date.month > 1 else 12
+        prev_year = selected_date.year if selected_date.month > 1 else selected_date.year - 1
         
         cursor.execute(
             "SELECT amount FROM monthly_base_amount WHERE unit_id = %s AND month = %s AND year = %s",
@@ -1499,17 +1505,13 @@ def user_cashiers(unit_id):
         prev_base = cursor.fetchone()
         if prev_base:
             base_amount = prev_base['amount']
-            # Criar registro para o mês atual com o valor do mês anterior
-            cursor.execute(
-                "INSERT INTO monthly_base_amount (unit_id, month, year, amount) VALUES (%s, %s, %s, %s)",
-                (unit_id, today.month, today.year, base_amount)
-            )
-            conn.commit()
     
-    # CORREÇÃO: Calcular "Dinheiro/PIX Hoje" EXCLUINDO estornos (só entradas PIX e saídas financeiro)
-    start_of_today = datetime(today.year, today.month, today.day, 0, 0, 0)
-    end_of_today = datetime(today.year, today.month, today.day, 23, 59, 59)
+    # Calcular períodos para a data selecionada
+    start_of_selected_day = datetime(selected_date.year, selected_date.month, selected_date.day, 0, 0, 0)
+    end_of_selected_day = datetime(selected_date.year, selected_date.month, selected_date.day, 23, 59, 59)
+    selected_date_only = selected_date.date()
     
+    # CORREÇÃO: Calcular "Dinheiro/PIX do Dia" para a data selecionada
     cursor.execute(
         """
         SELECT COALESCE(SUM(
@@ -1519,22 +1521,21 @@ def user_cashiers(unit_id):
                 WHEN m.type = 'despesa_loja' AND pm.category IN ('dinheiro', 'pix') THEN -m.amount
                 ELSE 0
             END
-        ), 0) as saldo_dinheiro_hoje
+        ), 0) as saldo_dinheiro_dia
         FROM movement m
         JOIN cashier c ON m.cashier_id = c.id
         JOIN payment_method pm ON m.payment_method = pm.id
         WHERE c.unit_id = %s AND m.created_at BETWEEN %s AND %s
         """,
-        (unit_id, start_of_today, end_of_today)
+        (unit_id, start_of_selected_day, end_of_selected_day)
     )
-    saldo_hoje_result = cursor.fetchone()
-    saldo_dinheiro_hoje = float(saldo_hoje_result['saldo_dinheiro_hoje']) if saldo_hoje_result['saldo_dinheiro_hoje'] else 0.0
+    saldo_dia_result = cursor.fetchone()
+    saldo_dinheiro_dia = float(saldo_dia_result['saldo_dinheiro_dia']) if saldo_dia_result['saldo_dinheiro_dia'] else 0.0
     
-    # CORREÇÃO: Valor base atual = valor base fixo (NÃO inclui movimentações)
-    # O valor base não muda com as movimentações, apenas o "Dinheiro/PIX Hoje"
+    # Valor base atual (fixo, não muda com movimentações)
     base_amount_atual = float(base_amount)
     
-    # Obter o controle de moedas
+    # Obter o controle de moedas (atual, não por data)
     cursor.execute("SELECT * FROM coins_control WHERE unit_id = %s", (unit_id,))
     coins_control = cursor.fetchone()
     coins_amount = coins_control['total_amount'] if coins_control else 0
@@ -1552,32 +1553,26 @@ def user_cashiers(unit_id):
             conn.rollback()
             flash(f'Erro ao criar controle de moedas: {str(e)}', 'error')
     
-    # Obter totais de movimentos do dia para cada caixa (INCLUINDO estornos para visualização)
-    start_date = datetime(today.year, today.month, today.day, 0, 0, 0)
-    end_date = datetime(today.year, today.month, today.day, 23, 59, 59)
-    today_date = today.date()
-    
+    # Obter totais de movimentos da data selecionada para cada caixa
     cashier_totals = {}
     for cashier in cashiers:
-        # Atualizar status do caixa baseado em movimentações
+        # Atualizar status do caixa baseado em movimentações da data selecionada
         cursor.execute(
             "SELECT COUNT(*) as count FROM movement WHERE cashier_id = %s AND created_at BETWEEN %s AND %s",
-            (cashier['id'], start_date, end_date)
+            (cashier['id'], start_of_selected_day, end_of_selected_day)
         )
         mov_count = cursor.fetchone()
         
-        # Se não tem movimentação, o caixa está fechado (exceto caixa financeiro)
+        # Se não tem movimentação no dia selecionado, verificar status no banco
         if cashier['number'] > 0:
-            new_status = 'aberto' if mov_count['count'] > 0 else 'fechado'
-            if cashier['status'] != new_status:
-                cursor.execute(
-                    "UPDATE cashier SET status = %s WHERE id = %s",
-                    (new_status, cashier['id'])
-                )
-                conn.commit()
-                cashier['status'] = new_status
+            if mov_count['count'] > 0:
+                status_display = 'aberto'
+            else:
+                status_display = cashier['status']  # Manter status do banco
+        else:
+            status_display = 'aberto'  # Caixa financeiro sempre aberto
         
-        # Obter totais incluindo estornos para visualização do saldo do caixa
+        # Obter totais da data selecionada incluindo estornos
         cursor.execute(
             """
             SELECT 
@@ -1587,7 +1582,7 @@ def user_cashiers(unit_id):
             FROM movement 
             WHERE cashier_id = %s AND created_at BETWEEN %s AND %s
             """,
-            (cashier['id'], start_date, end_date)
+            (cashier['id'], start_of_selected_day, end_of_selected_day)
         )
         result = cursor.fetchone()
         
@@ -1596,24 +1591,26 @@ def user_cashiers(unit_id):
             saida = float(result['total_saida']) if result['total_saida'] else 0.0
             estorno = float(result['total_estorno']) if result['total_estorno'] else 0.0
             
-            # Saldo do caixa = entradas - saídas - estornos (para visualização)
+            # Saldo do caixa = entradas - saídas - estornos
             saldo = entrada - saida - estorno
             
             cashier_totals[cashier['id']] = {
                 'entrada': entrada,
                 'saida': saida,
                 'estorno': estorno,
-                'saldo': saldo
+                'saldo': saldo,
+                'status_display': status_display
             }
         else:
             cashier_totals[cashier['id']] = {
                 'entrada': 0.0, 
                 'saida': 0.0, 
                 'estorno': 0.0, 
-                'saldo': 0.0
+                'saldo': 0.0,
+                'status_display': status_display
             }
     
-    # Obter totais gerais incluindo estornos (para visualização do saldo do dia)
+    # Obter totais gerais da data selecionada
     cursor.execute(
         """
         SELECT 
@@ -1624,7 +1621,7 @@ def user_cashiers(unit_id):
         WHERE cashier_id IN (SELECT id FROM cashier WHERE unit_id = %s) 
         AND created_at BETWEEN %s AND %s
         """,
-        (unit_id, start_date, end_date)
+        (unit_id, start_of_selected_day, end_of_selected_day)
     )
     totals = cursor.fetchone()
     
@@ -1632,20 +1629,20 @@ def user_cashiers(unit_id):
     total_saida = float(totals['total_saida']) if totals['total_saida'] else 0.0
     total_estorno = float(totals['total_estorno']) if totals['total_estorno'] else 0.0
     
-    # Saldo do dia = entradas - saídas - estornos (para visualização)
+    # Saldo do dia = entradas - saídas - estornos
     saldo_dia = total_entrada - total_saida - total_estorno
     
-    # Obter somatório de todos os Z do dia
+    # Obter somatório de todos os Z da data selecionada
     cursor.execute(
         "SELECT COALESCE(SUM(z_value), 0) as total_z FROM pdv_z_values "
         "WHERE cashier_id IN (SELECT id FROM cashier WHERE unit_id = %s) "
         "AND date = %s",
-        (unit_id, today_date)
+        (unit_id, selected_date_only)
     )
     z_result = cursor.fetchone()
     total_z = float(z_result['total_z']) if z_result and z_result['total_z'] else 0.0
     
-    # Calcular saldo do caixa financeiro (todas as movimentações históricas para visualização)
+    # Calcular saldo do caixa financeiro (todas as movimentações históricas até a data selecionada)
     cursor.execute(
         """
         SELECT 
@@ -1654,8 +1651,9 @@ def user_cashiers(unit_id):
             COALESCE(SUM(CASE WHEN type = 'estorno' THEN amount ELSE 0 END), 0) as total_estorno
         FROM movement 
         WHERE cashier_id IN (SELECT id FROM cashier WHERE unit_id = %s)
+        AND created_at <= %s
         """,
-        (unit_id,)
+        (unit_id, end_of_selected_day)
     )
     all_time_totals = cursor.fetchone()
     
@@ -1663,7 +1661,7 @@ def user_cashiers(unit_id):
     all_time_saida = float(all_time_totals['total_saida']) if all_time_totals['total_saida'] else 0.0
     all_time_estorno = float(all_time_totals['total_estorno']) if all_time_totals['total_estorno'] else 0.0
     
-    # Saldo financeiro = entradas - saídas - estornos (para visualização)
+    # Saldo financeiro = entradas - saídas - estornos (até a data selecionada)
     financial_balance = all_time_entrada - all_time_saida - all_time_estorno
     
     cursor.close()
@@ -1678,13 +1676,196 @@ def user_cashiers(unit_id):
         total_saida=total_saida,
         total_estorno=total_estorno,
         saldo_dia=saldo_dia,
-        base_amount=base_amount_atual,  # Valor base fixo
-        saldo_dinheiro_hoje=saldo_dinheiro_hoje,  # Dinheiro/PIX do dia (sem estornos)
+        base_amount=base_amount_atual,
+        saldo_dinheiro_hoje=saldo_dinheiro_dia,  # Agora é do dia selecionado
         coins_amount=coins_amount,
         financial_balance=financial_balance,
         financial_cashier_id=financial_cashier_id,
-        total_z=total_z
+        total_z=total_z,
+        selected_date=selected_date.strftime('%Y-%m-%d'),  # Data selecionada formatada
+        selected_date_display=selected_date.strftime('%d/%m/%Y')  # Para exibição
     )
+
+# API endpoint para carregamento rápido dos dados dos caixas
+@app.route('/api/unit/<int:unit_id>/cashiers_data')
+@login_required
+def api_cashiers_data(unit_id):
+    """
+    API endpoint para retornar dados dos caixas em formato JSON
+    para atualização dinâmica sem recarregar a página
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Verificar se a unidade existe
+    cursor.execute("SELECT * FROM unit WHERE id = %s", (unit_id,))
+    unit = cursor.fetchone()
+    
+    if not unit:
+        cursor.close()
+        conn.close()
+        return jsonify({'error': 'Unidade não encontrada'}), 404
+    
+    # Verificar se o usuário tem acesso à unidade
+    if not current_user.is_superuser:
+        cursor.execute(
+            "SELECT * FROM user_unit WHERE user_id = %s AND unit_id = %s",
+            (current_user.id, unit_id)
+        )
+        has_access = cursor.fetchone() is not None
+        
+        if not has_access:
+            cursor.close()
+            conn.close()
+            return jsonify({'error': 'Acesso não autorizado'}), 403
+    
+    # Obter data selecionada
+    selected_date_str = request.args.get('date')
+    if selected_date_str:
+        try:
+            selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d')
+        except ValueError:
+            selected_date = get_brazil_datetime()
+    else:
+        selected_date = get_brazil_datetime()
+    
+    # Obter valor base mensal
+    cursor.execute(
+        "SELECT * FROM monthly_base_amount WHERE unit_id = %s AND month = %s AND year = %s",
+        (unit_id, selected_date.month, selected_date.year)
+    )
+    monthly_base = cursor.fetchone()
+    base_amount = float(monthly_base['amount']) if monthly_base else 0.0
+    
+    # Calcular períodos para a data selecionada
+    start_of_selected_day = datetime(selected_date.year, selected_date.month, selected_date.day, 0, 0, 0)
+    end_of_selected_day = datetime(selected_date.year, selected_date.month, selected_date.day, 23, 59, 59)
+    selected_date_only = selected_date.date()
+    
+    # Calcular saldo de dinheiro/PIX do dia
+    cursor.execute(
+        """
+        SELECT COALESCE(SUM(
+            CASE 
+                WHEN m.type = 'entrada' AND pm.category IN ('dinheiro', 'pix') THEN m.amount
+                WHEN m.type = 'saida' AND pm.category IN ('dinheiro', 'pix') THEN -m.amount
+                WHEN m.type = 'despesa_loja' AND pm.category IN ('dinheiro', 'pix') THEN -m.amount
+                ELSE 0
+            END
+        ), 0) as saldo_dinheiro_dia
+        FROM movement m
+        JOIN cashier c ON m.cashier_id = c.id
+        JOIN payment_method pm ON m.payment_method = pm.id
+        WHERE c.unit_id = %s AND m.created_at BETWEEN %s AND %s
+        """,
+        (unit_id, start_of_selected_day, end_of_selected_day)
+    )
+    saldo_dia_result = cursor.fetchone()
+    saldo_dinheiro_dia = float(saldo_dia_result['saldo_dinheiro_dia']) if saldo_dia_result['saldo_dinheiro_dia'] else 0.0
+    
+    # Obter controle de moedas (atual)
+    cursor.execute("SELECT total_amount FROM coins_control WHERE unit_id = %s", (unit_id,))
+    coins_result = cursor.fetchone()
+    coins_amount = float(coins_result['total_amount']) if coins_result else 0.0
+    
+    # Obter total Z do dia
+    cursor.execute(
+        "SELECT COALESCE(SUM(z_value), 0) as total_z FROM pdv_z_values "
+        "WHERE cashier_id IN (SELECT id FROM cashier WHERE unit_id = %s) "
+        "AND date = %s",
+        (unit_id, selected_date_only)
+    )
+    z_result = cursor.fetchone()
+    total_z = float(z_result['total_z']) if z_result and z_result['total_z'] else 0.0
+    
+    # Obter dados dos caixas
+    cursor.execute("SELECT * FROM cashier WHERE unit_id = %s ORDER BY number", (unit_id,))
+    cashiers = cursor.fetchall()
+    
+    cashiers_data = []
+    financial_balance = 0.0
+    
+    for cashier in cashiers:
+        # Obter totais do dia para este caixa
+        cursor.execute(
+            """
+            SELECT 
+                COALESCE(SUM(CASE WHEN type = 'entrada' THEN amount ELSE 0 END), 0) as total_entrada,
+                COALESCE(SUM(CASE WHEN type IN ('saida', 'despesa_loja') THEN amount ELSE 0 END), 0) as total_saida,
+                COALESCE(SUM(CASE WHEN type = 'estorno' THEN amount ELSE 0 END), 0) as total_estorno
+            FROM movement 
+            WHERE cashier_id = %s AND created_at BETWEEN %s AND %s
+            """,
+            (cashier['id'], start_of_selected_day, end_of_selected_day)
+        )
+        result = cursor.fetchone()
+        
+        entrada = float(result['total_entrada']) if result['total_entrada'] else 0.0
+        saida = float(result['total_saida']) if result['total_saida'] else 0.0
+        estorno = float(result['total_estorno']) if result['total_estorno'] else 0.0
+        saldo = entrada - saida - estorno
+        
+        # Para o caixa financeiro, calcular saldo acumulado
+        if cashier['number'] == 0:
+            cursor.execute(
+                """
+                SELECT 
+                    COALESCE(SUM(CASE WHEN type = 'entrada' THEN amount ELSE 0 END), 0) as total_entrada,
+                    COALESCE(SUM(CASE WHEN type IN ('saida', 'despesa_loja') THEN amount ELSE 0 END), 0) as total_saida,
+                    COALESCE(SUM(CASE WHEN type = 'estorno' THEN amount ELSE 0 END), 0) as total_estorno
+                FROM movement 
+                WHERE cashier_id IN (SELECT id FROM cashier WHERE unit_id = %s)
+                AND created_at <= %s
+                """,
+                (unit_id, end_of_selected_day)
+            )
+            all_time_totals = cursor.fetchone()
+            
+            all_time_entrada = float(all_time_totals['total_entrada']) if all_time_totals['total_entrada'] else 0.0
+            all_time_saida = float(all_time_totals['total_saida']) if all_time_totals['total_saida'] else 0.0
+            all_time_estorno = float(all_time_totals['total_estorno']) if all_time_totals['total_estorno'] else 0.0
+            
+            financial_balance = all_time_entrada - all_time_saida - all_time_estorno
+        
+        # Status do caixa
+        cursor.execute(
+            "SELECT COUNT(*) as count FROM movement WHERE cashier_id = %s AND created_at BETWEEN %s AND %s",
+            (cashier['id'], start_of_selected_day, end_of_selected_day)
+        )
+        mov_count = cursor.fetchone()
+        
+        if cashier['number'] > 0:
+            status_display = 'aberto' if mov_count['count'] > 0 else cashier['status']
+        else:
+            status_display = 'aberto'
+        
+        cashiers_data.append({
+            'id': cashier['id'],
+            'number': cashier['number'],
+            'status': status_display,
+            'entrada': entrada,
+            'saida': saida,
+            'estorno': estorno,
+            'saldo': saldo
+        })
+    
+    cursor.close()
+    conn.close()
+    
+    # Retornar dados em formato JSON
+    return jsonify({
+        'success': True,
+        'data': {
+            'base_amount': base_amount,
+            'saldo_dinheiro_dia': saldo_dinheiro_dia,
+            'coins_amount': coins_amount,
+            'total_z': total_z,
+            'financial_balance': financial_balance,
+            'cashiers': cashiers_data,
+            'selected_date': selected_date.strftime('%Y-%m-%d'),
+            'selected_date_display': selected_date.strftime('%d/%m/%Y')
+        }
+    })
 
 @app.route('/user/unit/<int:unit_id>/cashier/<int:cashier_id>/movements', methods=['GET', 'POST'])
 @login_required
@@ -2714,7 +2895,22 @@ def batch_movements(unit_id, cashier_id):
 def page_not_found(e):
     return render_template('404.html'), 404
 
+# CORREÇÃO: Inicializar banco de dados
+def create_tables():
+    """
+    Função para inicializar o banco de dados.
+    Substitui o decorator @app.before_first_request que foi removido.
+    """
+    try:
+        initialize_database()
+        print("Base de dados inicializada com sucesso!")
+    except Exception as e:
+        print(f"Erro ao inicializar base de dados: {str(e)}")
+
 # Iniciar o aplicativo
 if __name__ == '__main__':
+    # CORREÇÃO: Chamar a função de inicialização antes de rodar o app
+    create_tables()
+    
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)

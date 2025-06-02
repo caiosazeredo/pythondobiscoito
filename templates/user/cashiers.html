@@ -3,6 +3,18 @@
 {% block title %}Caixas - {{ unit.name }} - Casa do Biscoito{% endblock %}
 
 {% block content %}
+<!-- Loading Overlay -->
+<div id="loadingOverlay" class="d-none position-fixed top-0 start-0 w-100 h-100" style="background: rgba(0,0,0,0.5); z-index: 9999;">
+    <div class="d-flex justify-content-center align-items-center h-100">
+        <div class="bg-white rounded p-4 text-center">
+            <div class="spinner-border text-warning mb-3" role="status">
+                <span class="visually-hidden">Carregando...</span>
+            </div>
+            <div>Carregando dados...</div>
+        </div>
+    </div>
+</div>
+
 <div class="container py-4">
     <div class="position-relative mb-4">
         {% if current_user.is_superuser %}
@@ -17,29 +29,67 @@
         <h1 class="text-center">Caixas - {{ unit.name }}</h1>
     </div>
     
+    <!-- Seletor de Data e Controles -->
     <div class="row justify-content-center mb-4">
-        <div class="col-md-6 d-flex gap-3">
-            <input type="text" id="searchInput" class="form-control" placeholder="Buscar caixa...">
-            
-            <div class="dropdown">
-                <button class="btn btn-outline-warning dropdown-toggle" type="button" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
-                    <i class="bi bi-gear-fill"></i>
-                </button>
-                <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton">
-                    <li><a class="dropdown-item" href="{{ url_for('user_monthly_base', unit_id=unit.id) }}">
-                        <i class="bi bi-calendar-month me-2"></i> Configurar Valor Base Mensal
-                    </a></li>
-                </ul>
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center gap-3">
+                                <label for="dateSelector" class="form-label mb-0 fw-bold">Data:</label>
+                                <div class="input-group" style="max-width: 200px;">
+                                    <input type="date" id="dateSelector" class="form-control" value="{{ selected_date }}">
+                                    <button class="btn btn-outline-warning" type="button" id="todayBtn" title="Ir para hoje">
+                                        <i class="bi bi-calendar-today"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-3">
+                            <div class="input-group">
+                                <input type="text" id="searchInput" class="form-control" placeholder="Buscar caixa...">
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-3 text-end">
+                            <div class="d-flex gap-2 justify-content-end">
+                                <div class="dropdown">
+                                    <button class="btn btn-outline-warning dropdown-toggle" type="button" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
+                                        <i class="bi bi-gear-fill"></i>
+                                    </button>
+                                    <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+                                        <li><a class="dropdown-item" href="{{ url_for('user_monthly_base', unit_id=unit.id) }}">
+                                            <i class="bi bi-calendar-month me-2"></i> Configurar Valor Base Mensal
+                                        </a></li>
+                                    </ul>
+                                </div>
+                                
+                                {% if current_user.is_superuser %}
+                                <button class="btn btn-warning" id="btnCreateCashier">
+                                    NOVO CAIXA
+                                </button>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            
-            {% if current_user.is_superuser %}
-            <button class="btn btn-warning" id="btnCreateCashier">
-                NOVO CAIXA
-            </button>
-            {% endif %}
         </div>
     </div>
     
+    <!-- Indicador da Data Selecionada -->
+    <div class="row justify-content-center mb-3">
+        <div class="col-md-6 text-center">
+            <div class="badge bg-warning text-dark fs-6 py-2 px-3">
+                <i class="bi bi-calendar-check me-2"></i>
+                Dados de: <span id="selectedDateDisplay">{{ selected_date_display }}</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Cards de Resumo -->
     <div class="row mb-4">
         <div class="col-md-12">
             <div class="card shadow-sm">
@@ -50,8 +100,8 @@
                                 <div class="text-warning mb-2">
                                     <i class="bi bi-currency-dollar fs-1"></i>
                                 </div>
-                                <h5 class="mb-1">Valor Base Atual</h5>
-                                <h3 class="text-primary">R$ {{ "%.2f"|format(base_amount) }}</h3>
+                                <h5 class="mb-1">Valor Base Fixo</h5>
+                                <h3 class="text-primary" id="baseAmountDisplay">R$ {{ "%.2f"|format(base_amount) }}</h3>
                                 <small class="text-muted">Fixo do Mês</small>
                             </div>
                         </div>
@@ -60,11 +110,11 @@
                                 <div class="text-warning mb-2">
                                     <i class="bi bi-cash fs-1"></i>
                                 </div>
-                                <h5 class="mb-1">Dinheiro/PIX Hoje</h5>
-                                <h3 class="{{ 'text-success' if saldo_dinheiro_hoje >= 0 else 'text-danger' }}">
+                                <h5 class="mb-1">Dinheiro/PIX do Dia</h5>
+                                <h3 class="{{ 'text-success' if saldo_dinheiro_hoje >= 0 else 'text-danger' }}" id="dinheiroPixDisplay">
                                     R$ {{ "%.2f"|format(saldo_dinheiro_hoje) }}
                                 </h3>
-                                <small class="text-muted">Apenas do Dia</small>
+                                <small class="text-muted">Apenas do Dia Selecionado</small>
                             </div>
                         </div>
                         <div class="col-md-3">
@@ -73,7 +123,8 @@
                                     <i class="bi bi-coin fs-1"></i>
                                 </div>
                                 <h5 class="mb-1">Moedas Disponíveis</h5>
-                                <h3 class="text-success">R$ {{ "%.2f"|format(coins_amount) }}</h3>
+                                <h3 class="text-success" id="coinsAmountDisplay">R$ {{ "%.2f"|format(coins_amount) }}</h3>
+                                <small class="text-muted">Valor Atual</small>
                             </div>
                         </div>
                         <div class="col-md-3">
@@ -82,9 +133,10 @@
                                     <i class="bi bi-receipt fs-1"></i>
                                 </div>
                                 <h5 class="mb-1">Total Z (PDV)</h5>
-                                <h3 class="text-primary">
+                                <h3 class="text-primary" id="totalZDisplay">
                                     R$ {{ "%.2f"|format(total_z) }}
                                 </h3>
+                                <small class="text-muted">Do Dia Selecionado</small>
                             </div>
                         </div>
                     </div>
@@ -93,7 +145,8 @@
         </div>
     </div>
     
-    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 justify-content-center">
+    <!-- Cards dos Caixas -->
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 justify-content-center" id="cashiersContainer">
         <!-- Caixa Financeiro - independente do loop -->
         <div class="col">
             <div class="card h-100 shadow-sm border-warning">
@@ -113,14 +166,14 @@
                         </div>
                         
                         <div class="d-flex justify-content-between mb-2">
-                            <span class="text-muted">Dinheiro/PIX Hoje:</span>
+                            <span class="text-muted">Dinheiro/PIX do Dia:</span>
                             <span class="fw-bold {{ 'text-success' if saldo_dinheiro_hoje >= 0 else 'text-danger' }}">
                                 R$ {{ "%.2f"|format(saldo_dinheiro_hoje) }}
                             </span>
                         </div>
                         
                         <div class="d-flex justify-content-between">
-                            <span class="text-muted small">Movim. Financeiro:</span>
+                            <span class="text-muted small">Saldo Acumulado:</span>
                             <span class="small {{ 'text-success' if financial_balance >= 0 else 'text-danger' }}">
                                 R$ {{ "%.2f"|format(financial_balance) }}
                             </span>
@@ -129,7 +182,7 @@
                     
                     <div class="d-flex gap-2">
                         {% if financial_cashier_id is not none %}
-                        <a href="{{ url_for('user_movements', unit_id=unit.id, cashier_id=financial_cashier_id) }}" class="btn btn-warning">
+                        <a href="{{ url_for('user_movements', unit_id=unit.id, cashier_id=financial_cashier_id, date=selected_date) }}" class="btn btn-warning">
                             <i class="bi bi-arrow-right-circle me-1"></i> Gerenciar
                         </a>
                         {% else %}
@@ -149,7 +202,7 @@
         <!-- Caixas regulares -->
         {% for cashier in cashiers %}
         {% if cashier.number > 0 %}
-        <div class="col cashier-card" data-number="{{ cashier.number }}" data-status="{{ cashier.status }}">
+        <div class="col cashier-card" data-number="{{ cashier.number }}" data-status="{{ cashier_totals[cashier.id].status_display }}">
             <div class="card h-100 shadow-sm">
                 <div class="card-body p-4">
                     <div class="d-flex align-items-center mb-3">
@@ -162,12 +215,11 @@
                     <div class="d-flex flex-column mb-3">
                         <div class="d-flex justify-content-between mb-2">
                             <span class="text-muted">Status:</span>
-                            <span class="badge rounded-pill {{ 'bg-success' if cashier.status == 'aberto' else 'bg-danger' }}">
-                                {{ "Aberto" if cashier.status == 'aberto' else "Fechado" }}
+                            <span class="badge rounded-pill {{ 'bg-success' if cashier_totals[cashier.id].status_display == 'aberto' else 'bg-danger' }}">
+                                {{ "Aberto" if cashier_totals[cashier.id].status_display == 'aberto' else "Fechado" }}
                             </span>
                         </div>
                         
-                        {% if cashier.id in cashier_totals %}
                         <div class="d-flex justify-content-between mb-2">
                             <span class="text-muted">Entradas:</span>
                             <span class="text-success">R$ {{ "%.2f"|format(cashier_totals[cashier.id].entrada) }}</span>
@@ -193,10 +245,9 @@
                                 R$ {{ "%.2f"|format(cashier_totals[cashier.id].saldo) }}
                             </span>
                         </div>
-                        {% endif %}
                     </div>
                     
-                    <a href="{{ url_for('user_movements', unit_id=unit.id, cashier_id=cashier.id) }}" class="stretched-link"></a>
+                    <a href="{{ url_for('user_movements', unit_id=unit.id, cashier_id=cashier.id, date=selected_date) }}" class="stretched-link"></a>
                 </div>
             </div>
         </div>
@@ -209,9 +260,99 @@
 {% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        const dateSelector = document.getElementById('dateSelector');
+        const todayBtn = document.getElementById('todayBtn');
         const searchInput = document.getElementById('searchInput');
         const cashierCards = document.querySelectorAll('.cashier-card');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const selectedDateDisplay = document.getElementById('selectedDateDisplay');
         
+        // Função para mostrar loading
+        function showLoading() {
+            loadingOverlay.classList.remove('d-none');
+        }
+        
+        // Função para esconder loading
+        function hideLoading() {
+            loadingOverlay.classList.add('d-none');
+        }
+        
+        // Função para formatar data para exibição
+        function formatDateForDisplay(dateString) {
+            const date = new Date(dateString + 'T00:00:00');
+            return date.toLocaleDateString('pt-BR');
+        }
+        
+        // Função para navegar para uma data específica
+        function navigateToDate(selectedDate) {
+            if (!selectedDate) return;
+            
+            showLoading();
+            
+            // Atualizar display da data selecionada
+            selectedDateDisplay.textContent = formatDateForDisplay(selectedDate);
+            
+            // Construir URL com a nova data
+            const url = new URL(window.location.href);
+            url.searchParams.set('date', selectedDate);
+            
+            // Navegar para a nova URL
+            window.location.href = url.toString();
+        }
+        
+        // Event listener para mudança de data
+        dateSelector.addEventListener('change', function() {
+            const selectedDate = this.value;
+            if (selectedDate) {
+                navigateToDate(selectedDate);
+            }
+        });
+        
+        // Botão "Hoje"
+        todayBtn.addEventListener('click', function() {
+            const today = new Date().toISOString().split('T')[0];
+            dateSelector.value = today;
+            navigateToDate(today);
+        });
+        
+        // Navegação por teclado no seletor de data
+        dateSelector.addEventListener('keydown', function(e) {
+            const currentDate = new Date(this.value || new Date());
+            let newDate;
+            
+            switch(e.key) {
+                case 'ArrowLeft':
+                    e.preventDefault();
+                    newDate = new Date(currentDate);
+                    newDate.setDate(currentDate.getDate() - 1);
+                    break;
+                case 'ArrowRight':
+                    e.preventDefault();
+                    newDate = new Date(currentDate);
+                    newDate.setDate(currentDate.getDate() + 1);
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    newDate = new Date(currentDate);
+                    newDate.setDate(currentDate.getDate() - 7);
+                    break;
+                case 'ArrowDown':
+                    e.preventDefault();
+                    newDate = new Date(currentDate);
+                    newDate.setDate(currentDate.getDate() + 7);
+                    break;
+                default:
+                    return; // Sair se não for uma tecla de navegação
+            }
+            
+            if (newDate) {
+                const newDateString = newDate.toISOString().split('T')[0];
+                this.value = newDateString;
+                navigateToDate(newDateString);
+            }
+        });
+        
+        // Função de busca de caixas
         searchInput.addEventListener('input', function() {
             const searchTerm = this.value.toLowerCase();
             
@@ -229,24 +370,68 @@
         
         {% if current_user.is_superuser %}
         // Criar novo caixa (apenas para superusuários)
-        document.getElementById('btnCreateCashier').addEventListener('click', function() {
-            Swal.fire({
-                title: 'Confirmar criação de caixa',
-                text: 'Deseja criar um novo caixa para esta unidade?',
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonColor: '#fec32e',
-                cancelButtonColor: '#d33',
-                confirmButtonText: 'Sim, criar',
-                cancelButtonText: 'Cancelar'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    // Redirect para criar caixa
-                    window.location.href = "{{ url_for('user_cashiers', unit_id=unit.id) }}?create=true";
-                }
+        const btnCreateCashier = document.getElementById('btnCreateCashier');
+        if (btnCreateCashier) {
+            btnCreateCashier.addEventListener('click', function() {
+                Swal.fire({
+                    title: 'Confirmar criação de caixa',
+                    text: 'Deseja criar um novo caixa para esta unidade?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#fec32e',
+                    cancelButtonColor: '#d33',
+                    confirmButtonText: 'Sim, criar',
+                    cancelButtonText: 'Cancelar'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        showLoading();
+                        const currentUrl = new URL(window.location.href);
+                        currentUrl.searchParams.set('create', 'true');
+                        window.location.href = currentUrl.toString();
+                    }
+                });
             });
-        });
+        }
         {% endif %}
+        
+        // Dicas de navegação por teclado
+        dateSelector.title = "Use as setas do teclado para navegar: ←→ (dias), ↑↓ (semanas)";
+        
+        // Auto-focus no seletor de data se não estiver em dispositivo móvel
+        if (!/Mobi|Android/i.test(navigator.userAgent)) {
+            setTimeout(() => {
+                dateSelector.focus();
+            }, 500);
+        }
+        
+        // Destacar se a data selecionada não é hoje
+        const today = new Date().toISOString().split('T')[0];
+        const selected = dateSelector.value;
+        
+        if (selected !== today) {
+            const badge = document.querySelector('.badge.bg-warning');
+            if (badge) {
+                badge.classList.remove('bg-warning', 'text-dark');
+                badge.classList.add('bg-info', 'text-white');
+                badge.innerHTML = '<i class="bi bi-calendar-event me-2"></i>Dados de: ' + 
+                    selectedDateDisplay.textContent + ' <small>(não é hoje)</small>';
+            }
+        }
+        
+        // Prevenção de loading infinito
+        window.addEventListener('beforeunload', function() {
+            hideLoading();
+        });
+        
+        // Esconder loading quando a página carregar completamente
+        window.addEventListener('load', function() {
+            hideLoading();
+        });
+        
+        // Timeout de segurança para esconder loading
+        setTimeout(function() {
+            hideLoading();
+        }, 5000);
     });
 </script>
 {% endblock %}
