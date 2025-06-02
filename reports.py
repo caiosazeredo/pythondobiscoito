@@ -764,6 +764,41 @@ def cashier_closing_report(unit_id):
             cashier_movements[cashier_number] = []
         cashier_movements[cashier_number].append(movement)
     
+    # CORREÇÃO: Calcular totais consolidados de Z e devoluções para toda a unidade
+    # Valor Z total da unidade (somente caixas operacionais, não financeiro)
+    cursor.execute(
+        "SELECT COALESCE(SUM(z_value), 0) as total_z FROM pdv_z_values "
+        "WHERE cashier_id IN (SELECT id FROM cashier WHERE unit_id = %s AND number > 0) "
+        "AND date = %s",
+        (unit_id, report_date)
+    )
+    unit_z_result = cursor.fetchone()
+    unit_total_z = float(unit_z_result['total_z']) if unit_z_result and unit_z_result['total_z'] else 0.0
+    
+    # Devoluções totais da unidade (somente caixas operacionais, não financeiro)
+    cursor.execute(
+        "SELECT COALESCE(SUM(devo_value), 0) as total_devo FROM devo_values "
+        "WHERE cashier_id IN (SELECT id FROM cashier WHERE unit_id = %s AND number > 0) "
+        "AND date = %s",
+        (unit_id, report_date)
+    )
+    unit_devo_result = cursor.fetchone()
+    unit_total_devo = float(unit_devo_result['total_devo']) if unit_devo_result and unit_devo_result['total_devo'] else 0.0
+    
+    # Vendas totais da unidade (apenas caixas operacionais para comparativo)
+    cursor.execute(
+        """
+        SELECT COALESCE(SUM(m.amount), 0) as total_vendas
+        FROM movement m
+        JOIN cashier c ON m.cashier_id = c.id
+        WHERE c.unit_id = %s AND c.number > 0 AND m.type = 'entrada' AND m.payment_status = 'realizado'
+        AND m.created_at BETWEEN %s AND %s
+        """,
+        (unit_id, start_datetime, end_datetime)
+    )
+    unit_vendas_result = cursor.fetchone()
+    unit_total_vendas = float(unit_vendas_result['total_vendas']) if unit_vendas_result and unit_vendas_result['total_vendas'] else 0.0
+    
     # Calcular totais por caixa
     cashier_totals = {}
     
@@ -832,21 +867,30 @@ def cashier_closing_report(unit_id):
                 'total': float(pm['total'])
             }
         
-        # Obter valor Z para este caixa
-        cursor.execute(
-            "SELECT z_value FROM pdv_z_values WHERE cashier_id = %s AND date = %s",
-            (cashier['id'], report_date)
-        )
-        z_result = cursor.fetchone()
-        z_value = float(z_result['z_value']) if z_result and z_result['z_value'] else 0.0
-        
-        # Obter cancelamentos para este caixa
-        cursor.execute(
-            "SELECT SUM(devo_value) as total FROM devo_values WHERE cashier_id = %s AND date = %s",
-            (cashier['id'], report_date)
-        )
-        devo_result = cursor.fetchone()
-        devo_value = float(devo_result['total']) if devo_result and devo_result['total'] else 0.0
+        # CORREÇÃO: Lógica diferenciada para caixa financeiro vs caixas operacionais
+        if cashier['number'] == 0:  # Caixa Financeiro
+            # Para o caixa financeiro, usar totais consolidados da unidade
+            z_value = unit_total_z
+            devo_value = unit_total_devo
+            vendas_comparativo = unit_total_vendas
+        else:  # Caixas operacionais
+            # Obter valor Z para este caixa específico
+            cursor.execute(
+                "SELECT z_value FROM pdv_z_values WHERE cashier_id = %s AND date = %s",
+                (cashier['id'], report_date)
+            )
+            z_result = cursor.fetchone()
+            z_value = float(z_result['z_value']) if z_result and z_result['z_value'] else 0.0
+            
+            # Obter cancelamentos para este caixa específico
+            cursor.execute(
+                "SELECT SUM(devo_value) as total FROM devo_values WHERE cashier_id = %s AND date = %s",
+                (cashier['id'], report_date)
+            )
+            devo_result = cursor.fetchone()
+            devo_value = float(devo_result['total']) if devo_result and devo_result['total'] else 0.0
+            
+            vendas_comparativo = total_entrada
         
         cashier_totals[cashier_number] = {
             'total_entrada': total_entrada,
@@ -856,6 +900,7 @@ def cashier_closing_report(unit_id):
             'payment_methods': payment_methods,
             'z_value': z_value,
             'devo_value': devo_value,
+            'vendas_comparativo': vendas_comparativo,  # NOVO: Para distinguir vendas do caixa vs totais da unidade
             'saldo': total_entrada - total_saida - total_estorno - total_despesa
         }
         

@@ -48,9 +48,9 @@
                 <div class="card-header bg-light py-3 d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">
                         {% if cashier_number == 0 %}
-                        Caixa Financeiro
+                        <i class="bi bi-bank me-2 text-warning"></i>Caixa Financeiro
                         {% else %}
-                        Caixa {{ cashier_number }}
+                        <i class="bi bi-calculator me-2 text-warning"></i>Caixa {{ cashier_number }}
                         {% endif %}
                     </h5>
                     
@@ -141,19 +141,44 @@
                             </div>
                         </div>
                         <div class="col-md-5">
-                            <h6 class="mb-3">Comparativo com PDV</h6>
+                            <h6 class="mb-3">
+                                {% if cashier_number == 0 %}
+                                Comparativo Consolidado (Toda Unidade)
+                                {% else %}
+                                Comparativo com PDV
+                                {% endif %}
+                            </h6>
+                            
+                            {% if cashier_number == 0 %}
+                            <!-- CORREÇÃO: Para caixa financeiro, mostrar totais consolidados -->
+                            <div class="alert alert-info py-2 mb-2">
+                                <small><i class="bi bi-info-circle me-1"></i> Valores consolidados de todos os caixas operacionais</small>
+                            </div>
+                            {% endif %}
+                            
                             <div class="d-flex justify-content-between mb-2">
-                                <span>Valor Z (PDV):</span>
+                                <span>
+                                    {% if cashier_number == 0 %}Total Vendas (Unidade):{% else %}Vendas (T):{% endif %}
+                                </span>
+                                <span class="fw-bold text-success">R$ {{ "%.2f"|format(cashier_totals[cashier_number].vendas_comparativo) }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>
+                                    {% if cashier_number == 0 %}Total Z (Unidade):{% else %}Valor Z (PDV):{% endif %}
+                                </span>
                                 <span class="fw-bold">R$ {{ "%.2f"|format(cashier_totals[cashier_number].z_value) }}</span>
                             </div>
                             <div class="d-flex justify-content-between mb-2">
-                                <span>Devoluções/Cancelamentos:</span>
+                                <span>
+                                    {% if cashier_number == 0 %}Total Devoluções (Unidade):{% else %}Devoluções/Cancelamentos:{% endif %}
+                                </span>
                                 <span class="fw-bold text-danger">R$ {{ "%.2f"|format(cashier_totals[cashier_number].devo_value) }}</span>
                             </div>
+                            <hr>
                             <div class="d-flex justify-content-between mb-2">
-                                <span>Diferença (Vendas - Z):</span>
-                                <span class="fw-bold {{ 'text-success' if cashier_totals[cashier_number].total_entrada - cashier_totals[cashier_number].z_value - cashier_totals[cashier_number].devo_value >= 0 else 'text-danger' }}">
-                                    R$ {{ "%.2f"|format(cashier_totals[cashier_number].total_entrada - cashier_totals[cashier_number].z_value - cashier_totals[cashier_number].devo_value) }}
+                                <span class="fw-bold">Diferença (Vendas - Z - Devo):</span>
+                                <span class="fw-bold {{ 'text-success' if cashier_totals[cashier_number].vendas_comparativo - cashier_totals[cashier_number].z_value - cashier_totals[cashier_number].devo_value >= 0 else 'text-danger' }}">
+                                    R$ {{ "%.2f"|format(cashier_totals[cashier_number].vendas_comparativo - cashier_totals[cashier_number].z_value - cashier_totals[cashier_number].devo_value) }}
                                 </span>
                             </div>
                         </div>
