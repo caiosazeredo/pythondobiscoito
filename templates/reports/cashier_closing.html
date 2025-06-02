@@ -42,7 +42,6 @@
     </div>
     
     {% for cashier_number, movements in cashier_movements.items() %}
-    {% if movements %}
     <div class="row mb-4">
         <div class="col-md-12">
             <div class="card shadow-sm">
@@ -84,6 +83,7 @@
                                 </tr>
                             </thead>
                             <tbody>
+                                {% if movements %}
                                 {% for movement in movements %}
                                 <tr>
                                     <td>{{ movement.created_at.strftime('%H:%M') }}</td>
@@ -105,13 +105,18 @@
                                             {{ "Pendente" if movement.payment_status == 'pendente' else "Realizado" }}
                                         </span>
                                     </td>
-                                    <td>{{ movement.payment_method_name }}</td>
+                                    <td>{{ movement.payment_method_name or 'N/A' }}</td>
                                     <td class="fw-bold {{ 'text-success' if movement.type == 'entrada' else 'text-danger' }}">
                                         R$ {{ "%.2f"|format(movement.amount) }}
                                     </td>
-                                    <td>{{ movement.description }}</td>
+                                    <td>{{ movement.description or '-' }}</td>
                                 </tr>
                                 {% endfor %}
+                                {% else %}
+                                <tr>
+                                    <td colspan="6" class="text-center py-3">Nenhuma movimentação registrada para esta data.</td>
+                                </tr>
+                                {% endif %}
                             </tbody>
                         </table>
                     </div>
@@ -121,6 +126,7 @@
                         <div class="col-md-7">
                             <h6 class="mb-3">Movimentos por Forma de Pagamento</h6>
                             <div class="d-flex flex-wrap gap-3">
+                                {% if cashier_totals[cashier_number].payment_methods %}
                                 {% for method_name, method in cashier_totals[cashier_number].payment_methods.items() %}
                                 <div class="border rounded p-2">
                                     <div class="d-flex flex-column">
@@ -129,6 +135,9 @@
                                     </div>
                                 </div>
                                 {% endfor %}
+                                {% else %}
+                                <span class="text-muted">Nenhuma movimentação por forma de pagamento</span>
+                                {% endif %}
                             </div>
                         </div>
                         <div class="col-md-5">
@@ -153,8 +162,9 @@
             </div>
         </div>
     </div>
-    {% endif %}
-    {% else %}
+    {% endfor %}
+    
+    {% if cashier_movements|length == 0 %}
     <div class="row">
         <div class="col-md-12">
             <div class="alert alert-info text-center">
@@ -162,9 +172,9 @@
             </div>
         </div>
     </div>
-    {% endfor %}
+    {% endif %}
     
-    {% if cashier_movements|length > 1 %}
+    {% if cashier_movements|length > 1 or (cashier_movements|length >= 1 and selected_cashier_id == 'all') %}
     <div class="row mb-4">
         <div class="col-md-12">
             <div class="card shadow-sm">
@@ -176,39 +186,28 @@
                         <div class="col-md-4">
                             <h6 class="mb-3">Totais por Tipo de Movimento</h6>
                             
-                            {% set total_entrada = 0 %}
-                            {% set total_saida = 0 %}
-                            {% set total_estorno = 0 %}
-                            {% set total_despesa = 0 %}
-                            
-                            {% for number, totals in cashier_totals.items() %}
-                                {% set total_entrada = total_entrada + totals.total_entrada %}
-                                {% set total_saida = total_saida + totals.total_saida %}
-                                {% set total_estorno = total_estorno + totals.total_estorno %}
-                                {% set total_despesa = total_despesa + totals.total_despesa %}
-                            {% endfor %}
-                            
+                            <!-- CORREÇÃO: Usar totais consolidados do backend -->
                             <div class="d-flex justify-content-between mb-2">
                                 <span>Total de Entradas:</span>
-                                <span class="fw-bold text-success">R$ {{ "%.2f"|format(total_entrada) }}</span>
+                                <span class="fw-bold text-success">R$ {{ "%.2f"|format(consolidated_totals.total_entrada) }}</span>
                             </div>
                             <div class="d-flex justify-content-between mb-2">
                                 <span>Total de Saídas:</span>
-                                <span class="fw-bold text-danger">R$ {{ "%.2f"|format(total_saida) }}</span>
+                                <span class="fw-bold text-danger">R$ {{ "%.2f"|format(consolidated_totals.total_saida) }}</span>
                             </div>
                             <div class="d-flex justify-content-between mb-2">
                                 <span>Total de Estornos:</span>
-                                <span class="fw-bold text-danger">R$ {{ "%.2f"|format(total_estorno) }}</span>
+                                <span class="fw-bold text-danger">R$ {{ "%.2f"|format(consolidated_totals.total_estorno) }}</span>
                             </div>
                             <div class="d-flex justify-content-between mb-2">
                                 <span>Total de Despesas:</span>
-                                <span class="fw-bold text-danger">R$ {{ "%.2f"|format(total_despesa) }}</span>
+                                <span class="fw-bold text-danger">R$ {{ "%.2f"|format(consolidated_totals.total_despesa) }}</span>
                             </div>
                             <hr>
                             <div class="d-flex justify-content-between mb-2">
                                 <span>Saldo do Dia:</span>
-                                <span class="fw-bold {{ 'text-success' if total_entrada - total_saida - total_estorno - total_despesa >= 0 else 'text-danger' }}">
-                                    R$ {{ "%.2f"|format(total_entrada - total_saida - total_estorno - total_despesa) }}
+                                <span class="fw-bold {{ 'text-success' if consolidated_totals.saldo_dia >= 0 else 'text-danger' }}">
+                                    R$ {{ "%.2f"|format(consolidated_totals.saldo_dia) }}
                                 </span>
                             </div>
                         </div>
@@ -232,7 +231,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        {% if cashier_movements|length > 1 %}
+        {% if cashier_movements|length > 1 or (cashier_movements|length >= 1 and selected_cashier_id == 'all') %}
         // Gráfico de distribuição por caixa
         const cashiersCtx = document.getElementById('cashiersChart').getContext('2d');
         
@@ -245,7 +244,7 @@
         ];
         
         {% for number, totals in cashier_totals.items() %}
-        cashierLabels.push('Caixa {{ number if number != 0 else "Financeiro" }}');
+        cashierLabels.push('{{ "Caixa Financeiro" if number == 0 else "Caixa " ~ number }}');
         cashierValues.push({{ totals.total_entrada }});
         {% endfor %}
         

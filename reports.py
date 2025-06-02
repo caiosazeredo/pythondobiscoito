@@ -701,7 +701,7 @@ def unit_performance_report():
         profit_data=json.dumps(profit_data)
     )
 
-# 6. Relatório de Fechamento de Caixa (Acessível por todos)
+# 6. Relatório de Fechamento de Caixa (Acessível por todos) - CORRIGIDO COMPLETAMENTE
 @reports.route('/reports/cashier_closing/<int:unit_id>', methods=['GET', 'POST'])
 @login_required
 def cashier_closing_report(unit_id):
@@ -734,9 +734,9 @@ def cashier_closing_report(unit_id):
     start_datetime = datetime.combine(report_date, datetime.min.time())
     end_datetime = datetime.combine(report_date, datetime.max.time())
     
-    # Preparar query base
+    # Query para obter movimentos
     base_query = """
-        SELECT c.number, m.id, m.type, m.amount, m.payment_status, m.description, m.created_at,
+        SELECT c.number, c.id as cashier_id, m.id, m.type, m.amount, m.payment_status, m.description, m.created_at,
                pm.name as payment_method_name, pm.category as payment_method_category
         FROM movement m
         JOIN cashier c ON m.cashier_id = c.id
@@ -746,7 +746,7 @@ def cashier_closing_report(unit_id):
     
     params = [unit_id, start_datetime, end_datetime]
     
-    # Adicionar filtro de caixa
+    # Adicionar filtro de caixa se especificado
     if cashier_id != 'all':
         base_query += " AND c.id = %s"
         params.append(cashier_id)
@@ -766,42 +766,89 @@ def cashier_closing_report(unit_id):
     
     # Calcular totais por caixa
     cashier_totals = {}
-    for number, movs in cashier_movements.items():
-        total_entrada = sum(m['amount'] for m in movs if m['type'] == 'entrada' and m['payment_status'] == 'realizado')
-        total_saida = sum(m['amount'] for m in movs if m['type'] == 'saida')
-        total_estorno = sum(m['amount'] for m in movs if m['type'] == 'estorno')
-        total_despesa = sum(m['amount'] for m in movs if m['type'] == 'despesa_loja')
+    
+    # CORREÇÃO: Variáveis para totais consolidados
+    consolidated_totals = {
+        'total_entrada': 0,
+        'total_saida': 0,
+        'total_estorno': 0,
+        'total_despesa': 0
+    }
+    
+    # Inicializar todos os caixas, mesmo sem movimentação no dia
+    for cashier in cashiers:
+        cashier_number = cashier['number']
         
-        # Totais por método de pagamento
+        # Aplicar filtro se necessário
+        if cashier_id != 'all' and str(cashier['id']) != str(cashier_id):
+            continue
+        
+        # Obter movimentações específicas do dia para este caixa
+        cursor.execute(
+            """
+            SELECT 
+                COALESCE(SUM(CASE WHEN type = 'entrada' AND payment_status = 'realizado' THEN amount ELSE 0 END), 0) as total_entrada,
+                COALESCE(SUM(CASE WHEN type = 'saida' THEN amount ELSE 0 END), 0) as total_saida,
+                COALESCE(SUM(CASE WHEN type = 'estorno' THEN amount ELSE 0 END), 0) as total_estorno,
+                COALESCE(SUM(CASE WHEN type = 'despesa_loja' THEN amount ELSE 0 END), 0) as total_despesa
+            FROM movement 
+            WHERE cashier_id = %s AND created_at BETWEEN %s AND %s
+            """,
+            (cashier['id'], start_datetime, end_datetime)
+        )
+        totals_result = cursor.fetchone()
+        
+        total_entrada = float(totals_result['total_entrada']) if totals_result['total_entrada'] else 0.0
+        total_saida = float(totals_result['total_saida']) if totals_result['total_saida'] else 0.0
+        total_estorno = float(totals_result['total_estorno']) if totals_result['total_estorno'] else 0.0
+        total_despesa = float(totals_result['total_despesa']) if totals_result['total_despesa'] else 0.0
+        
+        # CORREÇÃO: Acumular nos totais consolidados
+        consolidated_totals['total_entrada'] += total_entrada
+        consolidated_totals['total_saida'] += total_saida
+        consolidated_totals['total_estorno'] += total_estorno
+        consolidated_totals['total_despesa'] += total_despesa
+        
+        # Totais por método de pagamento para este caixa
+        cursor.execute(
+            """
+            SELECT pm.name, pm.category, SUM(m.amount) as total
+            FROM movement m
+            JOIN payment_method pm ON m.payment_method = pm.id
+            WHERE m.cashier_id = %s AND m.type = 'entrada' AND m.payment_status = 'realizado'
+            AND m.created_at BETWEEN %s AND %s
+            GROUP BY pm.name, pm.category
+            """,
+            (cashier['id'], start_datetime, end_datetime)
+        )
+        payment_methods_result = cursor.fetchall()
+        
         payment_methods = {}
-        for m in movs:
-            if m['type'] == 'entrada' and m['payment_status'] == 'realizado':
-                method_key = m['payment_method_name']
-                if method_key not in payment_methods:
-                    payment_methods[method_key] = {
-                        'name': m['payment_method_name'],
-                        'category': m['payment_method_category'],
-                        'total': 0
-                    }
-                payment_methods[method_key]['total'] += m['amount']
+        for pm in payment_methods_result:
+            method_key = pm['name']
+            payment_methods[method_key] = {
+                'name': pm['name'],
+                'category': pm['category'],
+                'total': float(pm['total'])
+            }
         
-        # Obter valor Z
+        # Obter valor Z para este caixa
         cursor.execute(
             "SELECT z_value FROM pdv_z_values WHERE cashier_id = %s AND date = %s",
-            (cashier_id if cashier_id != 'all' else 0, report_date)
+            (cashier['id'], report_date)
         )
         z_result = cursor.fetchone()
-        z_value = z_result['z_value'] if z_result and z_result['z_value'] else 0
+        z_value = float(z_result['z_value']) if z_result and z_result['z_value'] else 0.0
         
-        # Obter cancelamentos
+        # Obter cancelamentos para este caixa
         cursor.execute(
             "SELECT SUM(devo_value) as total FROM devo_values WHERE cashier_id = %s AND date = %s",
-            (cashier_id if cashier_id != 'all' else 0, report_date)
+            (cashier['id'], report_date)
         )
         devo_result = cursor.fetchone()
-        devo_value = devo_result['total'] if devo_result and devo_result['total'] else 0
+        devo_value = float(devo_result['total']) if devo_result and devo_result['total'] else 0.0
         
-        cashier_totals[number] = {
+        cashier_totals[cashier_number] = {
             'total_entrada': total_entrada,
             'total_saida': total_saida,
             'total_estorno': total_estorno,
@@ -811,6 +858,16 @@ def cashier_closing_report(unit_id):
             'devo_value': devo_value,
             'saldo': total_entrada - total_saida - total_estorno - total_despesa
         }
+        
+        # Se não há movimentos no dia mas o caixa existe, garantir que apareça na listagem
+        if cashier_number not in cashier_movements:
+            cashier_movements[cashier_number] = []
+    
+    # CORREÇÃO: Calcular saldo consolidado
+    consolidated_totals['saldo_dia'] = (consolidated_totals['total_entrada'] - 
+                                       consolidated_totals['total_saida'] - 
+                                       consolidated_totals['total_estorno'] - 
+                                       consolidated_totals['total_despesa'])
     
     cursor.close()
     conn.close()
@@ -822,7 +879,8 @@ def cashier_closing_report(unit_id):
         selected_cashier_id=cashier_id,
         report_date=report_date,
         cashier_movements=cashier_movements,
-        cashier_totals=cashier_totals
+        cashier_totals=cashier_totals,
+        consolidated_totals=consolidated_totals  # CORREÇÃO: Adicionar totais consolidados
     )
 
 # 7. Relatório de Movimentação de Moedas (Acessível por todos)
