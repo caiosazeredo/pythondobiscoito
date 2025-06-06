@@ -15,7 +15,7 @@
     </div>
 </div>
 
-<div class="container py-4">
+<div class="container py-4">    
     <div class="position-relative mb-4">
         {% if current_user.is_superuser %}
         <a href="{{ url_for('admin_home') }}" class="btn btn-link text-warning position-absolute start-0">
@@ -56,15 +56,15 @@
                         <div class="col-md-3 text-end">
                             <div class="d-flex gap-2 justify-content-end">
                                 <div class="dropdown">
-                                    <button class="btn btn-outline-warning dropdown-toggle" type="button" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
-                                        <i class="bi bi-gear-fill"></i>
-                                    </button>
-                                    <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton">
-                                        <li><a class="dropdown-item" href="{{ url_for('user_monthly_base', unit_id=unit.id) }}">
-                                            <i class="bi bi-calendar-month me-2"></i> Configurar Valor Base Mensal
-                                        </a></li>
-                                    </ul>
-                                </div>
+                                <button class="btn btn-outline-warning" type="button" id="configButton" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="bi bi-gear-fill"></i>
+                                </button>
+                                <ul class="dropdown-menu" aria-labelledby="configButton">
+                                    <li><a class="dropdown-item" href="{{ url_for('user_monthly_base', unit_id=unit.id) }}">
+                                        <i class="bi bi-calendar-month me-2"></i> Configurar Valor Base Mensal
+                                    </a></li>
+                                </ul>
+                                    </div>  
                                 
                                 {% if current_user.is_superuser %}
                                 <button class="btn btn-warning" id="btnCreateCashier">
@@ -282,7 +282,33 @@
             const date = new Date(dateString + 'T00:00:00');
             return date.toLocaleDateString('pt-BR');
         }
-        
+        // Inicializar o dropdown manualmente
+        const configButton = document.getElementById('configButton');
+        if (configButton) {
+            configButton.addEventListener('click', function(e) {
+                e.preventDefault();
+                const dropdownList = this.nextElementSibling;
+                if (dropdownList.classList.contains('show')) {
+                    dropdownList.classList.remove('show');
+                } else {
+                    // Fechar outros dropdowns abertos
+                    document.querySelectorAll('.dropdown-menu.show').forEach(menu => {
+                        menu.classList.remove('show');
+                    });
+                    dropdownList.classList.add('show');
+                }
+            });
+            
+            // Fechar o dropdown quando clicar fora dele
+            document.addEventListener('click', function(e) {
+                if (!configButton.contains(e.target)) {
+                    const dropdownList = configButton.nextElementSibling;
+                    if (dropdownList.classList.contains('show')) {
+                        dropdownList.classList.remove('show');
+                    }
+                }
+            });
+        }
         // Função para navegar para uma data específica
         function navigateToDate(selectedDate) {
             if (!selectedDate) return;
